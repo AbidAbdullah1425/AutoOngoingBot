@@ -1,47 +1,28 @@
-from aiohttp import web
-from plugins import web_server
-from pyrogram.enums import ParseMode
-from config import API_HASH, API_ID, LOGGER, TELEGRAM_TOKEN, TG_BOT_WORKERS, PORT, OWNER_ID
 from pyrogram import Client
-from datetime import datetime
+from plugins.db import get_tracked_titles, is_processed, mark_processed 
+from plugins.huggingface_uploader import send_to_huggingface 
+import feedparser
 import asyncio
-import logging
-import pyrogram.utils
 
-from rss_checker import check_feed  # <== FIXED: correct import
+RSS_URL = "https://subsplease.org/rss/?t&r=720"
 
-pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
+async def check_feed(app: Client):
+    while True:
+        feed = feedparser.parse(RSS_URL)
+        titles = await get_tracked_titles()
 
-class Bot(Client):
-    def __init__(self):
-        super().__init__(
-            name="Bot",
-            api_hash=API_HASH,
-            api_id=API_ID,
-            plugins={"root": "plugins"},
-            workers=TG_BOT_WORKERS,
-            bot_token=TELEGRAM_TOKEN
-        )
-        self.LOGGER = LOGGER
+        for item in feed.entries:
+            title = item.title
+            link = item.link  # torrent link
+            guid = item.guid
 
-    async def start(self):
-        await super().start()
-        self.set_parse_mode(ParseMode.HTML)
-        self.LOGGER(__name__).info("Bot Running...")
+            # Match tracked titles
+            for tracked in titles:
+                if tracked.lower() in title.lower():
+                    if await is_processed(guid):
+                        continue
 
-        self.uptime = datetime.now()
+                    await mark_processed(guid)
+                    await send_to_huggingface(title, link)
 
-        # Start feed watcher with self passed into check_feed()
-        self.loop.create_task(check_feed(self))  # <== USES check_feed() from rss_checker
-
-        # Start aiohttp web server
-        app = web.AppRunner(await web_server())
-        await app.setup()
-        await web.TCPSite(app, "0.0.0.0", PORT).start()
-
-    async def stop(self, *args):
-        await super().stop()
-        self.LOGGER(__name__).info("Bot stopped.")
-
-bot = Bot()
-bot.run()
+        await asyncio.sleep(600)  # every 10 minutes
