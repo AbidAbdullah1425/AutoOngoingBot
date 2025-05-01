@@ -4,7 +4,7 @@ from plugins.db import get_tracked_titles, is_processed, mark_processed
 from plugins.huggingface_uploader import send_to_huggingface
 import feedparser, asyncio
 
-RSS_URL = "https://subsplease.org/rss/?r=720"
+RSS_URL = "https://subsplease.org/rss/?t&r=720"
 
 async def check_feed(app: Client):
     while True:
