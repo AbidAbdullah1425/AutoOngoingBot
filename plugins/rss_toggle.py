@@ -1,7 +1,7 @@
 # plugins/rss_toggle.py
 from pyrogram import filters
 from pyrogram.types import Message
-from bot import Bot
+from bot import bot
 from config import LOGGER
 from datetime import datetime, timezone
 
