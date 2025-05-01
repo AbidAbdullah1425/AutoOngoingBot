@@ -2,7 +2,6 @@
 from plugins.db import get_tracked_titles, is_processed, mark_processed
 from plugins.huggingface_uploader import send_to_huggingface
 from config import LOGGER
-from bot import Bot
 import feedparser, asyncio
 from datetime import datetime, timezone
 
@@ -11,7 +10,7 @@ logger = LOGGER(__name__)
 
 RSS_URL = "https://subsplease.org/rss/?t&r=720"
 
-async def check_feed(Bot):  # now receives the Bot object
+async def check_feed(bot):  # now receives the Bot object
     logger.info("RSS checker service started")
     while True:
         try:
