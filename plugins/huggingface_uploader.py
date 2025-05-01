@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 # Initialize logger for this module
 logger = LOGGER(__name__)
 
-HF_URL = "https://abidabdullah199-compressor.hf.space/"  # Your FastAPI URL
+HF_URL = "https://abidabdullah199-Compressor.hf.space/"  # Your FastAPI URL
 
 async def send_to_huggingface(title, torrent_link):
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
