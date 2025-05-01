@@ -1,5 +1,5 @@
 import aiohttp
-from config import LOGGER, HF_ACCESS_TOKEN  # Add HF_ACCESS_TOKEN to your config.py
+from config import LOGGER
 from datetime import datetime, timezone
 
 # Initialize logger for this module
@@ -12,10 +12,6 @@ async def send_to_huggingface(title, torrent_link):
     
     logger.info(f"[{current_time}] Starting HuggingFace upload process for title: '{title}'")
     
-    headers = {
-        "Authorization": f"Bearer {HF_ACCESS_TOKEN}",
-    }
-    
     # Form data as your FastAPI endpoint expects
     form_data = aiohttp.FormData()
     form_data.add_field("title", title)
@@ -23,7 +19,7 @@ async def send_to_huggingface(title, torrent_link):
     form_data.add_field("crf", "28")
     form_data.add_field("preset", "ultrafast")
     
-    async with aiohttp.ClientSession(headers=headers) as session:
+    async with aiohttp.ClientSession() as session:
         try:
             logger.info(f"[{current_time}] Sending POST request to HuggingFace")
             
