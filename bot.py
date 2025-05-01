@@ -5,7 +5,7 @@ from config import API_HASH, API_ID, LOGGER, TELEGRAM_TOKEN, TG_BOT_WORKERS, POR
 from pyrogram import Client
 from pyrogram.enums import ParseMode
 from datetime import datetime
-from rss_checker import check_feed
+from plugins.rss_checker import check_feed
 import pyrogram.utils
 import asyncio
 
