@@ -81,5 +81,5 @@ async def check_feed(bot):  # receives the Bot object
             
         finally:
             # Sleep before next check
-            sleep_time = 600  # 10 minutes
+            sleep_time = 60  # 10 minutes
             await asyncio.sleep(sleep_time)
