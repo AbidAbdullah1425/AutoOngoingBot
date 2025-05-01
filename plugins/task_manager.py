@@ -1,6 +1,6 @@
 from pyrogram import filters
 from pyrogram.types import Message
-from bot import Bot, feed_status
+from bot import Bot
 from plugins.db import add_task, remove_task
 
 @Bot.on_message(filters.command("addtask"))
