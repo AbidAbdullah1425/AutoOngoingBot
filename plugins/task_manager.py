@@ -1,6 +1,6 @@
 from pyrogram import filters
 from pyrogram.types import Message
-from bot import Bot
+from bot import bot
 from plugins.db import add_task, remove_task
 from config import LOGGER
 from datetime import datetime, timezone
