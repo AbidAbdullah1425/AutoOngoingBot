@@ -10,7 +10,7 @@ logger = LOGGER(__name__)
 
 RSS_URL = "https://subsplease.org/rss/?t&r=720"
 
-async def check_feed(bot):  # now receives the Bot object
+async def check_feed(bot):  # receives the Bot object
     logger.info("RSS checker service started")
     while True:
         try:
@@ -19,14 +19,12 @@ async def check_feed(bot):  # now receives the Bot object
                 logger.info(f"Starting RSS feed check at {current_time}")
                 
                 # Fetch and parse RSS feed
-                logger.debug(f"Fetching RSS feed from {RSS_URL}")
                 feed = feedparser.parse(RSS_URL)
                 if feed.bozo:
                     logger.error(f"RSS Feed parsing error: {feed.bozo_exception}")
                     continue
                 
                 # Get tracked titles
-                logger.debug("Retrieving tracked titles from database")
                 titles = await get_tracked_titles()
                 logger.info(f"Found {len(titles)} tracked titles")
                 
@@ -36,9 +34,8 @@ async def check_feed(bot):  # now receives the Bot object
                 
                 for item in feed.entries:
                     title = item.title
-                    link = item.link
+                    link = item.link  # This will be a nyaa.si view link
                     guid = item.guid
-                    logger.debug(f"Checking feed item: '{title}'")
                     
                     for tracked in titles:
                         if tracked.lower() in title.lower():
@@ -48,17 +45,22 @@ async def check_feed(bot):  # now receives the Bot object
                             if await is_processed(guid):
                                 logger.debug(f"Item already processed (GUID: {guid})")
                                 continue
-                                
+                            
                             try:
-                                # Process new item
-                                logger.info(f"Processing new item: {title}")
+                                # Mark as processed before sending to avoid duplicates
                                 await mark_processed(guid)
                                 logger.debug(f"Marked as processed: {guid}")
                                 
-                                # Send to HuggingFace
-                                await send_to_huggingface(title, link)
-                                logger.info(f"Successfully uploaded to HuggingFace: {title}")
+                                # Send to HuggingFace for processing
+                                result = await send_to_huggingface(title, link)
                                 
+                                if result.get("status") == "success":
+                                    logger.info(f"Successfully sent '{title}' for processing")
+                                else:
+                                    error_msg = result.get("error", "Unknown error")
+                                    logger.error(f"Failed to process '{title}': {error_msg}")
+                                    # You might want to implement unmark_processed here if you want to retry failed items
+                            
                             except Exception as e:
                                 logger.error(f"Error processing item '{title}': {str(e)}", exc_info=True)
                 
