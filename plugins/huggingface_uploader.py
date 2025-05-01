@@ -7,7 +7,7 @@ async def send_to_huggingface(title, torrent_link):
         data = {
             "title": title,
             "torrent_link": torrent_link,
-            "crf": 26,
+            "crf": 28,
             "preset": "ultrafast"
         }
         try:
