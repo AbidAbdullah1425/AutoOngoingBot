@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 # Initialize logger for this module
 logger = LOGGER(__name__)
 
-@Bot.on_message(filters.command("addtask"))
+@bot.on_message(filters.command("addtask"))
 async def add(bot, msg: Message):
     try:
         # Get current timestamp
@@ -43,7 +43,7 @@ async def add(bot, msg: Message):
         logger.error(f"[{current_time}] Unexpected error in add_task handler: {str(e)}", exc_info=True)
         await msg.reply("❌ An unexpected error occurred")
 
-@Bot.on_message(filters.command("deltask"))
+@bot.on_message(filters.command("deltask"))
 async def delete(bot, msg: Message):
     try:
         # Get current timestamp
