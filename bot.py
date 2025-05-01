@@ -1,14 +1,13 @@
+# bot.py
 from aiohttp import web
 from plugins import web_server
-from pyrogram.enums import ParseMode
-from config import API_HASH, API_ID, LOGGER, TELEGRAM_TOKEN, TG_BOT_WORKERS, PORT, OWNER_ID
+from config import API_HASH, API_ID, LOGGER, TELEGRAM_TOKEN, TG_BOT_WORKERS, PORT
 from pyrogram import Client
+from pyrogram.enums import ParseMode
 from datetime import datetime
-import asyncio
-import logging
+from rss_checker import check_feed
 import pyrogram.utils
-
-from rss_checker import check_feed  # <== FIXED: correct import
+import asyncio
 
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -23,6 +22,7 @@ class Bot(Client):
             bot_token=TELEGRAM_TOKEN
         )
         self.LOGGER = LOGGER
+        self.feed_enabled = False  # toggle flag for RSS
 
     async def start(self):
         await super().start()
@@ -30,11 +30,8 @@ class Bot(Client):
         self.LOGGER(__name__).info("Bot Running...")
 
         self.uptime = datetime.now()
+        self.loop.create_task(check_feed(self))  # pass self to rss_checker
 
-        # Start feed watcher with self passed into check_feed()
-        self.loop.create_task(check_feed(self))  # <== USES check_feed() from rss_checker
-
-        # Start aiohttp web server
         app = web.AppRunner(await web_server())
         await app.setup()
         await web.TCPSite(app, "0.0.0.0", PORT).start()
