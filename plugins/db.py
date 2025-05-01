@@ -1,9 +1,9 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
-from config import DB_URL
+from config import DB_URL, DB_NAME
 
 client = AsyncIOMotorClient(DB_URL)
-db = client.anime_bot
+db = client.DB_NAME
 
 async def add_task(title): await db.tasks.update_one({"title": title}, {"$set": {"title": title}}, upsert=True)
 async def remove_task(title): await db.tasks.delete_one({"title": title})
