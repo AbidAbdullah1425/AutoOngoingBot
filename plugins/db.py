@@ -1,7 +1,8 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+from config import DB_URL
 
-client = AsyncIOMotorClient(os.getenv("MONGO_URL"))
+client = AsyncIOMotorClient(os.getenv(DB_URL))
 db = client.anime_bot
 
 async def add_task(title): await db.tasks.update_one({"title": title}, {"$set": {"title": title}}, upsert=True)
