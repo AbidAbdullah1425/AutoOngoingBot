@@ -5,7 +5,7 @@ from config import API_HASH, API_ID, LOGGER, TELEGRAM_TOKEN, TG_BOT_WORKERS, POR
 from pyrogram import Client
 import asyncio
 from datetime import datetime
-from db import get_tracked_titles, is_processed, mark_processed
+from plugins/db import get_tracked_titles, is_processed, mark_processed
 from rss_parser import fetch_rss_items
 from config import OWNER_ID
 import logging
