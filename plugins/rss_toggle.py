@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 # Initialize logger for this module
 logger = LOGGER(__name__)
 
-@Bot.on_message(filters.command("taskon"))
+@bot.on_message(filters.command("taskon"))
 async def task_on(client, msg: Message):
     try:
         # Get current timestamp
@@ -43,7 +43,7 @@ async def task_on(client, msg: Message):
         except:
             logger.error(f"[{error_time}] Failed to send error message to user")
 
-@Bot.on_message(filters.command("taskoff"))
+@bot.on_message(filters.command("taskoff"))
 async def task_off(client, msg: Message):
     try:
         # Get current timestamp
