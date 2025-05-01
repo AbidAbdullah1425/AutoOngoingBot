@@ -36,6 +36,7 @@ async def check_feed(bot):  # receives the Bot object
                     title = item.title
                     link = item.link  # This will be a nyaa.si view link
                     guid = item.guid
+                    logger.debug(f"Checking feed item: {title} with link {link}")
                     
                     for tracked in titles:
                         if tracked.lower() in title.lower():
@@ -47,22 +48,29 @@ async def check_feed(bot):  # receives the Bot object
                                 continue
                             
                             try:
-                                # Mark as processed before sending to avoid duplicates
+                                # Convert nyaa.si view link to direct download link
+                                torrent_id = link.split('/view/')[1].split('/')[0]
+                                direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
+                                logger.info(f"Converting {link} to direct download link: {direct_link}")
+
+                                # Process new item
+                                logger.info(f"Processing new item: {title}")
                                 await mark_processed(guid)
                                 logger.debug(f"Marked as processed: {guid}")
                                 
-                                # Send to HuggingFace for processing
-                                result = await send_to_huggingface(title, link)
+                                # Send to HuggingFace
+                                logger.info(f"Sending to HuggingFace: {title} with link {direct_link}")
+                                result = await send_to_huggingface(title, direct_link)
                                 
-                                if result.get("status") == "success":
-                                    logger.info(f"Successfully sent '{title}' for processing")
+                                if result and result.get("status") == "success":
+                                    logger.info(f"Successfully sent '{title}' to HuggingFace")
                                 else:
-                                    error_msg = result.get("error", "Unknown error")
+                                    error_msg = result.get("error", "Unknown error") if result else "No response from HuggingFace"
                                     logger.error(f"Failed to process '{title}': {error_msg}")
-                                    # You might want to implement unmark_processed here if you want to retry failed items
-                            
+                                
                             except Exception as e:
                                 logger.error(f"Error processing item '{title}': {str(e)}", exc_info=True)
+                                continue
                 
                 logger.info("Completed RSS feed check cycle")
             else:
@@ -74,5 +82,4 @@ async def check_feed(bot):  # receives the Bot object
         finally:
             # Sleep before next check
             sleep_time = 600  # 10 minutes
-            logger.debug(f"Sleeping for {sleep_time} seconds before next check")
             await asyncio.sleep(sleep_time)
