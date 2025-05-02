@@ -9,30 +9,6 @@ logger = LOGGER(__name__)
 
 RSS_URL = "https://subsplease.org/rss/?t&r=720"
 
-async def process_item(title, link, guid):
-    """Process a single RSS feed item"""
-    try:
-        # Convert nyaa.si view link to direct download link
-        torrent_id = link.split('/view/')[1].split('/')[0]
-        direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
-        logger.info(f"Processing: {title} with link: {direct_link}")
-        
-        # Send to HuggingFace
-        result = await send_to_huggingface(title, direct_link)
-        if result and result.get("status") == "success":
-            logger.info(f"Successfully sent to HuggingFace: {title}")
-            await mark_processed(guid)
-            return True
-        else:
-            error = result.get("error", "Unknown error") if result else "No response"
-            logger.error(f"Failed to process {title}: {error}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"Error processing {title}: {str(e)}")
-        logger.error(traceback.format_exc())
-        return False
-
 async def check_feed(bot):
     """Main RSS checker function"""
     logger.info("RSS checker service started")
@@ -71,17 +47,31 @@ async def check_feed(bot):
                     if tracked.lower() in title.lower():
                         logger.info(f"Match found! Tracked title '{tracked}' found in '{title}'")
                         
-                        # Check if already processed
-                        if await is_processed(guid):
-                            logger.debug(f"Already processed: {guid}")
+                        try:
+                            # Check if already processed
+                            if await is_processed(guid):
+                                logger.debug(f"Already processed: {guid}")
+                                continue
+                                
+                            # Convert nyaa.si view link to direct download link
+                            torrent_id = link.split('/view/')[1].split('/')[0]
+                            direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
+                            logger.info(f"Processing: {title} with link: {direct_link}")
+                            
+                            # Send to HuggingFace
+                            result = await send_to_huggingface(title, direct_link)
+                            
+                            if result and result.get("status") == "success":
+                                await mark_processed(guid)
+                                logger.info(f"Successfully processed: {title}")
+                            else:
+                                error = result.get("error", "Unknown error") if result else "No response"
+                                logger.error(f"Failed to process {title}: {error}")
+                                
+                        except Exception as e:
+                            logger.error(f"Error processing {title}: {str(e)}")
+                            logger.error(traceback.format_exc())
                             continue
-                        
-                        # Process the item
-                        success = await process_item(title, link, guid)
-                        if success:
-                            logger.info(f"Successfully processed: {title}")
-                        else:
-                            logger.error(f"Failed to process: {title}")
                         
                         # Small delay between items to prevent overload
                         await asyncio.sleep(1)
