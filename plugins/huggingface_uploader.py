@@ -7,7 +7,7 @@ import json
 logger = LOGGER(__name__)
 
 # Corrected URL with capital C in Compressor
-HF_URL = "https://abidabdullah199-Compressor.hf.space"
+HF_URL = "https://abidabdullah199-Compressor.hf.space/"
 
 async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, preset: str = "ultrafast"):
     """
