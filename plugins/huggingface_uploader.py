@@ -4,10 +4,18 @@ from datetime import datetime, timezone
 
 logger = LOGGER(__name__)
 
-HF_URL = "https://abidabdullah199-compressor.hf.space/"
+# Your HuggingFace space URL
+HF_URL = "https://abidabdullah199-Compressor.hf.space"
 
-async def send_to_huggingface(title, torrent_link):
-    """Send file to HuggingFace for processing"""
+async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, preset: str = "ultrafast"):
+    """
+    Send torrent to HuggingFace for processing
+    Args:
+        title: Title of the video
+        torrent_link: Direct torrent download link
+        crf: Compression factor (default: 28)
+        preset: FFmpeg preset (default: ultrafast)
+    """
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     
     try:
@@ -15,31 +23,40 @@ async def send_to_huggingface(title, torrent_link):
         form_data = aiohttp.FormData()
         form_data.add_field("title", title)
         form_data.add_field("torrent_link", torrent_link)
-        form_data.add_field("crf", "28")
-        form_data.add_field("preset", "ultrafast")
+        form_data.add_field("crf", str(crf))  # Convert to string as Form data
+        form_data.add_field("preset", preset)
         
-        logger.info(f"[{current_time}] Sending to HuggingFace - Title: {title}")
-        logger.info(f"[{current_time}] Torrent Link: {torrent_link}")
+        # Log the request
+        logger.info(f"[{current_time}] Sending request to HuggingFace")
+        logger.info(f"[{current_time}] Title: {title}")
+        logger.info(f"[{current_time}] Torrent: {torrent_link}")
+        logger.info(f"[{current_time}] CRF: {crf}")
+        logger.info(f"[{current_time}] Preset: {preset}")
         
-        # Set timeout for the request
-        timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes timeout
+        # Set timeout (30 minutes since video processing takes time)
+        timeout = aiohttp.ClientTimeout(total=1800)  # 30 minutes
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(HF_URL, data=form_data) as response:
-                response_text = await response.text()
+                # Log response status
                 logger.info(f"[{current_time}] Response Status: {response.status}")
-                logger.info(f"[{current_time}] Response Text: {response_text}")
-                
-                if response.status != 200:
-                    return {
-                        "status": "failed",
-                        "error": f"HTTP {response.status}: {response_text}"
-                    }
                 
                 try:
                     result = await response.json()
-                    logger.info(f"[{current_time}] HuggingFace Response: {result}")
-                    return result
+                    logger.info(f"[{current_time}] Response: {result}")
+                    
+                    if response.status == 200 and result.get("status") == "success":
+                        return {
+                            "status": "success",
+                            "message": result.get("message", "Upload successful")
+                        }
+                    else:
+                        error = result.get("reason") or result.get("error") or "Unknown error"
+                        return {
+                            "status": "failed",
+                            "error": f"Upload failed: {error}"
+                        }
+                        
                 except Exception as e:
                     return {
                         "status": "failed",
@@ -47,11 +64,17 @@ async def send_to_huggingface(title, torrent_link):
                     }
                     
     except asyncio.TimeoutError:
-        error_msg = f"Request timed out after 300 seconds"
+        error_msg = "Request timed out after 30 minutes"
         logger.error(f"[{current_time}] {error_msg}")
-        return {"status": "failed", "error": error_msg}
+        return {
+            "status": "failed",
+            "error": error_msg
+        }
         
     except Exception as e:
         error_msg = f"Error: {str(e)}"
         logger.error(f"[{current_time}] {error_msg}")
-        return {"status": "failed", "error": error_msg}
+        return {
+            "status": "failed",
+            "error": error_msg
+        }
