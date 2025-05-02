@@ -5,28 +5,28 @@ import asyncio
 
 logger = LOGGER(__name__)
 
-# Your HuggingFace space URL
-HF_URL = "https://abidabdullah199-Compressor.hf.space/"  # Added trailing slash
+# FastAPI endpoint
+HF_URL = "https://abidabdullah199-Compressor.hf.space/"  # Note the capital C in Compressor
 
 async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, preset: str = "ultrafast"):
     """
     Send torrent to HuggingFace for processing
     Args:
-        title: Title of the video
-        torrent_link: Direct torrent download link (must be direct .torrent file link)
+        title: Title of the video (required)
+        torrent_link: Direct torrent download link
         crf: Compression factor (default: 28)
         preset: FFmpeg preset (default: ultrafast)
     """
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     
     try:
-        # Create form data exactly matching FastAPI endpoint
-        form_data = aiohttp.FormData()
-        form_data.add_field("title", str(title))
-        form_data.add_field("torrent_link", str(torrent_link))
-        form_data.add_field("crf", str(crf))
-        form_data.add_field("preset", str(preset))
-        # Note: magnet field is None by default, matching FastAPI's Optional parameter
+        # Create form data exactly matching your FastAPI parameters
+        form = aiohttp.FormData()
+        form.add_field("title", str(title))  # Required field
+        form.add_field("crf", str(crf))      # Optional with default 28
+        form.add_field("preset", str(preset)) # Optional with default "ultrafast"
+        form.add_field("torrent_link", str(torrent_link))  # Optional
+        form.add_field("magnet", "")         # Optional, empty since we're using torrent_link
         
         # Log the request
         logger.info(f"[{current_time}] Sending request to HuggingFace Space")
@@ -39,36 +39,54 @@ async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, pres
         timeout = aiohttp.ClientTimeout(total=3600)  # 1 hour timeout
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(HF_URL, data=form_data) as response:
+            async with session.post(HF_URL, data=form) as response:
                 response_text = await response.text()
                 logger.info(f"[{current_time}] Response Status: {response.status}")
                 logger.info(f"[{current_time}] Response Text: {response_text}")
                 
                 try:
-                    # Handle response based on your FastAPI app's response format
+                    # Match exact response format from your FastAPI app
                     if response.status == 200:
                         return {
                             "status": "success",
                             "message": "Uploaded and cleaned up."
                         }
                     else:
-                        # Parse error messages that match your FastAPI app's error responses
-                        if "aria2c failed" in response_text:
-                            return {"status": "failed", "error": "Download failed"}
-                        elif "ffmpeg failed" in response_text:
-                            return {"status": "failed", "error": "Compression failed"}
-                        elif "No video file found" in response_text:
-                            return {"status": "failed", "error": "No video file found"}
-                        elif "No torrent or magnet link provided" in response_text:
-                            return {"status": "failed", "error": "Invalid torrent link"}
+                        # Match your FastAPI error responses exactly
+                        if response_text.find("No torrent or magnet link provided") != -1:
+                            return {
+                                "status": "failed",
+                                "reason": "No torrent or magnet link provided"
+                            }
+                        elif response_text.find("aria2c failed") != -1:
+                            return {
+                                "status": "aria2c failed"
+                            }
+                        elif response_text.find("ffmpeg failed") != -1:
+                            return {
+                                "status": "ffmpeg failed"
+                            }
+                        elif response_text.find("No video file found") != -1:
+                            return {
+                                "status": "failed",
+                                "reason": "No video file found"
+                            }
+                        elif response_text.find("upload_failed") != -1:
+                            return {
+                                "status": "upload_failed",
+                                "error": response_text
+                            }
                         else:
-                            return {"status": "failed", "error": response_text}
+                            return {
+                                "status": "failed",
+                                "reason": response_text
+                            }
                             
                 except Exception as e:
                     logger.error(f"[{current_time}] Error parsing response: {str(e)}")
                     return {
                         "status": "failed",
-                        "error": f"Failed to process response: {str(e)}"
+                        "reason": f"Failed to process response: {str(e)}"
                     }
                     
     except asyncio.TimeoutError:
@@ -76,7 +94,7 @@ async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, pres
         logger.error(f"[{current_time}] {error_msg}")
         return {
             "status": "failed",
-            "error": error_msg
+            "reason": error_msg
         }
         
     except Exception as e:
@@ -84,5 +102,5 @@ async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, pres
         logger.error(f"[{current_time}] {error_msg}")
         return {
             "status": "failed",
-            "error": error_msg
+            "reason": error_msg
         }
