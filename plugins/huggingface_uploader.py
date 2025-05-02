@@ -2,11 +2,12 @@ import aiohttp
 from config import LOGGER
 from datetime import datetime, timezone
 import asyncio
+import json
 
 logger = LOGGER(__name__)
 
 # FastAPI endpoint
-HF_URL = "https://abidabdullah199-Compressor.hf.space/"  # Note the capital C in Compressor
+HF_URL = "https://abidabdullah199-Compressor.hf.space/"
 
 async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, preset: str = "ultrafast"):
     """
@@ -20,87 +21,87 @@ async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, pres
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     
     try:
-        # Create form data exactly matching your FastAPI parameters
+        logger.info(f"[{current_time}] Starting request to HuggingFace Space")
+        logger.info(f"[{current_time}] Parameters:")
+        logger.info(f"  - Title: {title}")
+        logger.info(f"  - Torrent: {torrent_link}")
+        logger.info(f"  - CRF: {crf}")
+        logger.info(f"  - Preset: {preset}")
+
+        # Create form data
         form = aiohttp.FormData()
-        form.add_field("title", str(title))  # Required field
-        form.add_field("crf", str(crf))      # Optional with default 28
-        form.add_field("preset", str(preset)) # Optional with default "ultrafast"
-        form.add_field("torrent_link", str(torrent_link))  # Optional
-        form.add_field("magnet", "")         # Optional, empty since we're using torrent_link
+        form.add_field("title", str(title))
+        form.add_field("torrent_link", str(torrent_link))
+        form.add_field("crf", str(crf))
+        form.add_field("preset", str(preset))
+        # Don't add magnet field if we're using torrent_link
         
-        # Log the request
-        logger.info(f"[{current_time}] Sending request to HuggingFace Space")
-        logger.info(f"[{current_time}] Title: {title}")
-        logger.info(f"[{current_time}] Torrent: {torrent_link}")
-        logger.info(f"[{current_time}] CRF: {crf}")
-        logger.info(f"[{current_time}] Preset: {preset}")
+        # Set proper headers for multipart form data
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "AutoOngoingBot/1.0"
+        }
         
-        # Long timeout for video processing
         timeout = aiohttp.ClientTimeout(total=3600)  # 1 hour timeout
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(HF_URL, data=form) as response:
-                response_text = await response.text()
-                logger.info(f"[{current_time}] Response Status: {response.status}")
-                logger.info(f"[{current_time}] Response Text: {response_text}")
-                
-                try:
-                    # Match exact response format from your FastAPI app
+            try:
+                # Make POST request (since only POST is allowed)
+                async with session.post(
+                    HF_URL,
+                    data=form,
+                    headers=headers,
+                    allow_redirects=True
+                ) as response:
+                    
+                    response_text = await response.text()
+                    logger.info(f"[{current_time}] Response Status: {response.status}")
+                    logger.info(f"[{current_time}] Response Text: {response_text}")
+                    
                     if response.status == 200:
                         return {
                             "status": "success",
-                            "message": "Uploaded and cleaned up."
+                            "message": "Video processing started"
+                        }
+                    elif response.status == 405:
+                        logger.error(f"[{current_time}] Method not allowed. Endpoint only accepts POST requests.")
+                        return {
+                            "status": "failed",
+                            "reason": "API endpoint configuration error"
                         }
                     else:
-                        # Match your FastAPI error responses exactly
-                        if response_text.find("No torrent or magnet link provided") != -1:
-                            return {
-                                "status": "failed",
-                                "reason": "No torrent or magnet link provided"
-                            }
-                        elif response_text.find("aria2c failed") != -1:
-                            return {
-                                "status": "aria2c failed"
-                            }
-                        elif response_text.find("ffmpeg failed") != -1:
-                            return {
-                                "status": "ffmpeg failed"
-                            }
-                        elif response_text.find("No video file found") != -1:
-                            return {
-                                "status": "failed",
-                                "reason": "No video file found"
-                            }
-                        elif response_text.find("upload_failed") != -1:
-                            return {
-                                "status": "upload_failed",
-                                "error": response_text
-                            }
-                        else:
-                            return {
-                                "status": "failed",
-                                "reason": response_text
-                            }
+                        # Try to parse response as JSON
+                        try:
+                            error_data = json.loads(response_text)
+                            error_reason = error_data.get("reason") or error_data.get("detail") or "Unknown error"
+                        except json.JSONDecodeError:
+                            error_reason = response_text or "Unknown error"
                             
-                except Exception as e:
-                    logger.error(f"[{current_time}] Error parsing response: {str(e)}")
-                    return {
-                        "status": "failed",
-                        "reason": f"Failed to process response: {str(e)}"
-                    }
+                        logger.error(f"[{current_time}] Error: {error_reason}")
+                        return {
+                            "status": "failed",
+                            "reason": error_reason
+                        }
+                        
+            except aiohttp.ClientError as e:
+                logger.error(f"[{current_time}] Connection error: {str(e)}")
+                return {
+                    "status": "failed",
+                    "reason": f"Connection error: {str(e)}"
+                }
                     
     except asyncio.TimeoutError:
-        error_msg = "Request timed out after 1 hour"
-        logger.error(f"[{current_time}] {error_msg}")
+        logger.error(f"[{current_time}] Request timed out")
         return {
             "status": "failed",
-            "reason": error_msg
+            "reason": "Request timed out"
         }
         
     except Exception as e:
-        error_msg = f"Error: {str(e)}"
-        logger.error(f"[{current_time}] {error_msg}")
+        logger.error(f"[{current_time}] Unexpected error: {str(e)}")
+        import traceback
+        logger.error(f"[{current_time}] Traceback: {traceback.format_exc()}")
         return {
             "status": "failed",
-            "reason": error_msg
+            "reason": f"Unexpected error: {str(e)}"
         }
