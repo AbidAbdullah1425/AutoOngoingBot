@@ -1,79 +1,104 @@
-from pyrogram import filters
-from pyrogram.types import Message
-from bot import bot
-from plugins.db import add_task, remove_task
+from plugins.db import get_tracked_titles, is_processed, mark_processed
+from plugins.huggingface_uploader import send_to_huggingface
 from config import LOGGER
+import feedparser
+import asyncio
+import traceback
 from datetime import datetime, timezone
 
-# Initialize logger for this module
 logger = LOGGER(__name__)
 
-@bot.on_message(filters.command("addtask"))
-async def add(bot, msg: Message):
-    try:
-        # Get current timestamp
-        current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        
-        # Log command receipt
-        logger.info(f"[{current_time}] Received addtask command from user {msg.from_user.id}")
-        
-        # Check if command has arguments
-        if len(msg.command) < 2:
-            logger.warning(f"[{current_time}] User {msg.from_user.id} sent addtask command without title")
-            await msg.reply("⚠️ Please provide a title to add!")
-            return
-            
-        title = " ".join(msg.command[1:])
-        logger.info(f"[{current_time}] Adding new task: '{title}'")
-        
-        # Attempt to add task to database
-        try:
-            await add_task(title)
-            logger.info(f"[{current_time}] Successfully added task: '{title}' to database")
-            
-            # Send confirmation message
-            await msg.reply(f"✅ Added: `{title}`")
-            logger.debug(f"[{current_time}] Sent confirmation message for adding '{title}'")
-            
-        except Exception as db_error:
-            logger.error(f"[{current_time}] Database error while adding task '{title}': {str(db_error)}", exc_info=True)
-            await msg.reply("❌ Failed to add task due to database error")
-            
-    except Exception as e:
-        logger.error(f"[{current_time}] Unexpected error in add_task handler: {str(e)}", exc_info=True)
-        await msg.reply("❌ An unexpected error occurred")
+RSS_URL = "https://subsplease.org/rss/?t&r=720"
+_rss_task = None
 
-@bot.on_message(filters.command("deltask"))
-async def delete(bot, msg: Message):
+async def check_rss_feed(client):
+    """RSS feed checker function"""
+    while True:
+        try:
+            current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            logger.info(f"[{current_time}] Checking RSS feed")
+            
+            # Parse RSS feed
+            feed = feedparser.parse(RSS_URL)
+            if feed.bozo:
+                logger.error(f"RSS Feed parsing error: {feed.bozo_exception}")
+                await asyncio.sleep(60)
+                continue
+                
+            # Get tracked titles
+            titles = await get_tracked_titles()
+            logger.info(f"Found {len(titles)} tracked titles")
+            
+            # Check each feed entry
+            for item in feed.entries:
+                title = item.title
+                link = item.link
+                guid = item.guid
+                
+                for tracked in titles:
+                    if tracked.lower() in title.lower():
+                        logger.info(f"Match found! '{tracked}' in '{title}'")
+                        
+                        # Skip if already processed
+                        if await is_processed(guid):
+                            continue
+                            
+                        try:
+                            # Convert to direct download link
+                            torrent_id = link.split('/view/')[1].split('/')[0]
+                            direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
+                            
+                            # Send to HuggingFace
+                            result = await send_to_huggingface(title, direct_link)
+                            
+                            if result and result.get("status") == "success":
+                                await mark_processed(guid)
+                                logger.info(f"Successfully processed: {title}")
+                            else:
+                                error = result.get("error", "Unknown error") if result else "No response"
+                                logger.error(f"Failed to process {title}: {error}")
+                                
+                        except Exception as e:
+                            logger.error(f"Error processing {title}: {str(e)}")
+                            logger.error(traceback.format_exc())
+                            
+                        await asyncio.sleep(1)
+                        
+        except Exception as e:
+            logger.error(f"Error in RSS checker: {str(e)}")
+            logger.error(traceback.format_exc())
+            
+        await asyncio.sleep(60)  # Wait 60 seconds before next check
+
+async def start_rss_checker(client):
+    """Start the RSS checker task"""
+    global _rss_task
+    
     try:
-        # Get current timestamp
-        current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        
-        # Log command receipt
-        logger.info(f"[{current_time}] Received deltask command from user {msg.from_user.id}")
-        
-        # Check if command has arguments
-        if len(msg.command) < 2:
-            logger.warning(f"[{current_time}] User {msg.from_user.id} sent deltask command without title")
-            await msg.reply("⚠️ Please provide a title to remove!")
+        if _rss_task and not _rss_task.done():
             return
             
-        title = " ".join(msg.command[1:])
-        logger.info(f"[{current_time}] Removing task: '{title}'")
+        _rss_task = asyncio.create_task(check_rss_feed(client))
+        logger.info("RSS checker task started")
         
-        # Attempt to remove task from database
-        try:
-            await remove_task(title)
-            logger.info(f"[{current_time}] Successfully removed task: '{title}' from database")
-            
-            # Send confirmation message
-            await msg.reply(f"❌ Removed: `{title}`")
-            logger.debug(f"[{current_time}] Sent confirmation message for removing '{title}'")
-            
-        except Exception as db_error:
-            logger.error(f"[{current_time}] Database error while removing task '{title}': {str(db_error)}", exc_info=True)
-            await msg.reply("❌ Failed to remove task due to database error")
+    except Exception as e:
+        logger.error(f"Error starting RSS checker: {str(e)}")
+        raise
+
+async def stop_rss_checker(client):
+    """Stop the RSS checker task"""
+    global _rss_task
+    
+    try:
+        if _rss_task and not _rss_task.done():
+            _rss_task.cancel()
+            try:
+                await _rss_task
+            except asyncio.CancelledError:
+                pass
+            _rss_task = None
+            logger.info("RSS checker task stopped")
             
     except Exception as e:
-        logger.error(f"[{current_time}] Unexpected error in delete_task handler: {str(e)}", exc_info=True)
-        await msg.reply("❌ An unexpected error occurred")
+        logger.error(f"Error stopping RSS checker: {str(e)}")
+        raise
