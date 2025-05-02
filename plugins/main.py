@@ -71,4 +71,4 @@ async def process_torrent(client, message):
             
     except Exception as e:
         logger.error(f"Error in torrent command: {str(e)}")
-        await message.reply_text("❌ Failed to process torrent!")")
+        await message.reply_text("❌ Failed to process torrent!")
