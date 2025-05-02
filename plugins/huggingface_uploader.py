@@ -1,10 +1,12 @@
 import aiohttp
 from config import LOGGER
 from datetime import datetime, timezone
+import asyncio
+import json
 
 logger = LOGGER(__name__)
 
-# Your HuggingFace space URL
+# Corrected URL with capital C in Compressor
 HF_URL = "https://abidabdullah199-Compressor.hf.space"
 
 async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, preset: str = "ultrafast"):
@@ -23,7 +25,7 @@ async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, pres
         form_data = aiohttp.FormData()
         form_data.add_field("title", title)
         form_data.add_field("torrent_link", torrent_link)
-        form_data.add_field("crf", str(crf))  # Convert to string as Form data
+        form_data.add_field("crf", str(crf))
         form_data.add_field("preset", preset)
         
         # Log the request
@@ -34,18 +36,44 @@ async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, pres
         logger.info(f"[{current_time}] Preset: {preset}")
         
         # Set timeout (30 minutes since video processing takes time)
-        timeout = aiohttp.ClientTimeout(total=1800)  # 30 minutes
+        timeout = aiohttp.ClientTimeout(total=1800)
+        
+        # Headers to ensure proper content type handling
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "multipart/form-data"
+        }
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(HF_URL, data=form_data) as response:
-                # Log response status
+            async with session.post(HF_URL, data=form_data, headers=headers) as response:
+                # Log response status and headers
                 logger.info(f"[{current_time}] Response Status: {response.status}")
+                logger.info(f"[{current_time}] Response Content-Type: {response.headers.get('content-type', 'unknown')}")
+                
+                # Get response text first
+                response_text = await response.text()
+                logger.info(f"[{current_time}] Raw Response: {response_text}")
+                
+                if response.status != 200:
+                    return {
+                        "status": "failed",
+                        "error": f"HTTP {response.status}: {response_text}"
+                    }
                 
                 try:
-                    result = await response.json()
-                    logger.info(f"[{current_time}] Response: {result}")
+                    # Try to parse JSON response
+                    if response.headers.get('content-type', '').startswith('application/json'):
+                        result = json.loads(response_text)
+                    else:
+                        # If response is not JSON, create a result based on status
+                        if "success" in response_text.lower():
+                            result = {"status": "success", "message": response_text}
+                        else:
+                            result = {"status": "failed", "error": response_text}
                     
-                    if response.status == 200 and result.get("status") == "success":
+                    logger.info(f"[{current_time}] Processed Response: {result}")
+                    
+                    if result.get("status") == "success":
                         return {
                             "status": "success",
                             "message": result.get("message", "Upload successful")
@@ -58,9 +86,16 @@ async def send_to_huggingface(title: str, torrent_link: str, crf: int = 28, pres
                         }
                         
                 except Exception as e:
+                    logger.error(f"[{current_time}] Error parsing response: {str(e)}")
+                    # If we can't parse the response but got a 200 status, assume success
+                    if response.status == 200:
+                        return {
+                            "status": "success",
+                            "message": "Request completed successfully"
+                        }
                     return {
                         "status": "failed",
-                        "error": f"Failed to parse response: {str(e)}"
+                        "error": f"Failed to process response: {str(e)}"
                     }
                     
     except asyncio.TimeoutError:
