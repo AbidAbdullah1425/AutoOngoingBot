@@ -18,6 +18,7 @@ DB_URL = os.environ.get("DB_URL", "mongodb+srv://abidabdullahown7:abidabdullah14
 DB_NAME = os.environ.get("DB_NAME", "AUTO_ONGOING_BOT")
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "HeavenlySubsBot")
 HUGGINGFACE_URL = os.environ.get("HUGGINGFACE_URL", "https://abidabdullah199-Compressor.hf.space/")
+DB_CHANNEL_ID = int(os.environ.get("DB_CHANNEL_ID", "-1002689479503"))
 
 # Aria2 RPC configuration
 ARIA2_SECRET = os.environ.get("ARIA2_SECRET", "")  # Optional: Use "" if no secret is set
