@@ -4,8 +4,11 @@ from plugins.huggingface_uploader import send_to_huggingface
 from bot import Bot
 from config import LOGGER
 from datetime import datetime, timezone
+from fastapi import FastAPI, Request
+from base64 import b64encode
 
 logger = LOGGER(__name__)
+app = FastAPI()
 
 # Command to start RSS checking task
 @Bot.on_message(filters.command("taskon") & filters.private)
@@ -72,3 +75,66 @@ async def process_torrent(client, message):
     except Exception as e:
         logger.error(f"Error in torrent command: {str(e)}")
         await message.reply_text("❌ Failed to process torrent!")
+
+# encode func
+async def encode(string):
+    return b64encode(string.encode()).decode()
+
+
+@app.post("/process_file")
+async def process_file(request: Request):
+    try:
+        data = await request.json()
+        file_id = data.get("file_id")
+        
+        if not file_id:
+            logger.error("No file_id received")
+            return {"error": "No file_id provided"}
+
+        try:
+            # Get message details from the channel
+            message = await Bot.get_messages(Bot.db_channel.id, message_ids=[-1])
+            if not message:
+                return {"error": "Message not found"}
+
+            # Generate base64 string
+            base64_string = await encode(f"get-{message.id * abs(Bot.db_channel.id)}")
+            
+            # Create shareable link
+            bot_username = (await Bot.get_me()).username
+            link = f"https://t.me/{bot_username}?start={base64_string}"
+            
+            # Create button markup
+            reply_markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔁 Share URL", 
+                    url=f'https://telegram.me/share/url?url={link}')
+            ]])
+
+            # Log the generated link
+            logger.info(f"Generated share link for file_id {file_id}: {link}")
+
+            # Send to all admins (assuming ADMINS is defined in your config)
+            from config import ADMINS
+            for admin in ADMINS:
+                try:
+                    await Bot.send_message(
+                        chat_id=admin,
+                        text=f"<b>New file processed</b>\n\nFile ID: <code>{file_id}</code>\n\nShare Link: {link}",
+                        reply_markup=reply_markup
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send message to admin {admin}: {e}")
+
+            return {
+                "status": "success",
+                "link": link,
+                "base64_string": base64_string
+            }
+
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+            return {"error": str(e)}
+
+    except Exception as e:
+        logger.error(f"Error in process_file: {e}")
+        return {"error": str(e)}
