@@ -21,7 +21,8 @@ class Bot(Client):
             workers=TG_BOT_WORKERS,
             bot_token=TELEGRAM_TOKEN
         )
-        self.LOGGER = LOGGER
+        self.LOGGER = LOGGER,
+        self.db_channel = None
 
     async def start(self):
         await super().start()
