@@ -7,7 +7,7 @@ from datetime import datetime
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
-from config import API_HASH, API_ID, LOGGER, TELEGRAM_TOKEN, TG_BOT_WORKERS, PORT
+from config import API_HASH, API_ID, LOGGER, TELEGRAM_TOKEN, TG_BOT_WORKERS, PORT, DB_CHANNEL_ID
 
 class Bot(Client):
     def __init__(self):
@@ -27,6 +27,7 @@ class Bot(Client):
     async def start(self):
         await super().start()
         usr_bot_me = await self.get_me()
+        self.db_channel = await self.get_chat(DB_CHANNEL_ID)
         self.uptime = datetime.now()
 
         self.set_parse_mode(ParseMode.HTML)
