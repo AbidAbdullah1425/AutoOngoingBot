@@ -86,55 +86,41 @@ async def process_file(request: Request):
     try:
         data = await request.json()
         file_id = data.get("file_id")
-        
-        if not file_id:
-            logger.error("No file_id received")
-            return {"error": "No file_id provided"}
+        message_id = data.get("message_id")  # Get message_id from request
+
+        if not file_id or not message_id:
+            return {"error": "Missing file_id or message_id"}
 
         try:
-            # Get message details from the channel
-            message = await Bot.get_messages(Bot.db_channel.id, message_ids=[-1])
-            if not message:
-                return {"error": "Message not found"}
-
-            # Generate base64 string
-            base64_string = await encode(f"get-{message.id * abs(Bot.db_channel.id)}")
+            # Generate base64 string using the actual message_id
+            base64_string = await encode(f"get-{message_id * abs(Bot.db_channel.id)}")
             
             # Create shareable link
             bot_username = (await Bot.get_me()).username
             link = f"https://t.me/{bot_username}?start={base64_string}"
-            
+
             # Create button markup
             reply_markup = InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔁 Share URL", 
                     url=f'https://telegram.me/share/url?url={link}')
             ]])
 
-            # Log the generated link
-            logger.info(f"Generated share link for file_id {file_id}: {link}")
-
-            # Send to all admins (assuming ADMINS is defined in your config)
+            # Send to admin
             from config import ADMINS
             for admin in ADMINS:
                 try:
                     await Bot.send_message(
                         chat_id=admin,
-                        text=f"<b>New file processed</b>\n\nFile ID: <code>{file_id}</code>\n\nShare Link: {link}",
+                        text=f"<b>Here is your link</b>\n\n{link}",
                         reply_markup=reply_markup
                     )
                 except Exception as e:
-                    logger.error(f"Failed to send message to admin {admin}: {e}")
+                    continue
 
-            return {
-                "status": "success",
-                "link": link,
-                "base64_string": base64_string
-            }
+            return {"status": "success", "link": link}
 
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
             return {"error": str(e)}
 
     except Exception as e:
-        logger.error(f"Error in process_file: {e}")
         return {"error": str(e)}
