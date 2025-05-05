@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from plugins.task_manager import start_rss_checker, stop_rss_checker
 from plugins.huggingface_uploader import send_to_huggingface
 from bot import Bot
-from config import LOGGER
+from config import LOGGER, BOT_USERNAME
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request
 from base64 import b64encode
@@ -96,8 +96,7 @@ async def process_file(request: Request):
             base64_string = await encode(f"get-{message_id * abs(Bot.db_channel.id)}")
             
             # Create shareable link
-            bot_username = (await Bot.get_me()).username
-            link = f"https://t.me/{bot_username}?start={base64_string}"
+            link = f"https://t.me/{BOT_USERNAME}?start={base64_string}"
 
             # Create button markup
             reply_markup = InlineKeyboardMarkup([[
