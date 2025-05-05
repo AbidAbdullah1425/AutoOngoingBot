@@ -2,7 +2,9 @@ from pyrogram import Client, filters
 from plugins.task_manager import start_rss_checker, stop_rss_checker
 from plugins.huggingface_uploader import send_to_huggingface
 from bot import Bot
-from config import LOGGER, BOT_USERNAME
+from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, ADMINS
+
+
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request
 from base64 import b64encode
@@ -73,11 +75,11 @@ async def process_torrent(client, message):
             
             if file_id and message_id:
                 # Generate base64 string using DB_CHANNEL_ID from config
-                from config import DB_CHANNEL_ID
+                
                 base64_string = await encode(f"get-{message_id * abs(DB_CHANNEL_ID)}")
                 
                 # Create shareable link using BOT_USERNAME from config
-                from config import BOT_USERNAME
+                
                 link = f"https://t.me/{BOT_USERNAME}?start={base64_string}"
                 
                 # Create button markup
@@ -134,7 +136,7 @@ async def process_file(request: Request):
             ]])
 
             # Send to admin
-            from config import ADMINS
+            
             for admin in ADMINS:
                 try:
                     await Bot.send_message(
