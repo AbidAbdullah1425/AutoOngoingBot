@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from plugins.task_manager import start_rss_checker, stop_rss_checker
 from plugins.huggingface_uploader import send_to_huggingface
 from bot import Bot
-from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, ADMINS
+from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, OWNER_ID
 
 
 from datetime import datetime, timezone
@@ -137,7 +137,7 @@ async def process_file(request: Request):
 
             # Send to admin
             
-            for admin in ADMINS:
+            for admin in OWNER_ID:
                 try:
                     await Bot.send_message(
                         chat_id=admin,
