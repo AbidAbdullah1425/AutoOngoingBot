@@ -72,10 +72,12 @@ async def process_torrent(client, message):
             message_id = result.get("message_id")
             
             if file_id and message_id:
-                # Generate base64 string
-                base64_string = await encode(f"get-{message_id * abs(Bot.db_channel.id)}")
+                # Generate base64 string using DB_CHANNEL_ID from config
+                from config import DB_CHANNEL_ID
+                base64_string = await encode(f"get-{message_id * abs(DB_CHANNEL_ID)}")
                 
-                # Create shareable link using BOT_USERNAME from config                
+                # Create shareable link using BOT_USERNAME from config
+                from config import BOT_USERNAME
                 link = f"https://t.me/{BOT_USERNAME}?start={base64_string}"
                 
                 # Create button markup
