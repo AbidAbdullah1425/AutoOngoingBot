@@ -16,7 +16,7 @@ PORT = os.environ.get("PORT", "8080")
 TG_BOT_WORKERS = int(os.environ.get("TG_BOT_WORKERS", "1"))
 DB_URL = os.environ.get("DB_URL", "mongodb+srv://abidabdullahown7:abidabdullah1425@cluster0.7lgug.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 DB_NAME = os.environ.get("DB_NAME", "AUTO_ONGOING_BOT")
-HF_ACCESS_TOKEN = os.environ.get("HF_ACCESS_TOKEN", "0")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "HeavenlySubsBot")
 
 # Aria2 RPC configuration
 ARIA2_SECRET = os.environ.get("ARIA2_SECRET", "")  # Optional: Use "" if no secret is set
