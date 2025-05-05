@@ -1,9 +1,8 @@
 from aiohttp import ClientSession
-from config import LOGGER
+from config import LOGGER, HUGGINGFACE_URL
 from datetime import datetime, timezone
 
 logger = LOGGER(__name__)
-HUGGINGFACE_URL = "https://abidabdullah199-Compressor.hf.space/"  # Make sure this is correct
 
 async def send_to_huggingface(title: str, torrent_link: str):
     try:
@@ -18,19 +17,40 @@ async def send_to_huggingface(title: str, torrent_link: str):
         logger.info(f"  - Preset: ultrafast")
 
         async with ClientSession() as session:
+            # Form data
             data = {
                 "title": title,
-                "torrent": torrent_link,  # Changed from torrent_link to torrent
+                "torrent": torrent_link,
                 "crf": 28,
                 "preset": "ultrafast"
             }
             
-            async with session.post(HUGGINGFACE_URL, data=data) as response:
-                logger.info(f"[{current_time}] Response Status: {response.status}")
-                result = await response.json()
-                logger.info(f"[{current_time}] Response Text: {result}")
-                return result
+            try:
+                async with session.post(HUGGINGFACE_URL, data=data) as response:
+                    logger.info(f"[{current_time}] Response Status: {response.status}")
+                    
+                    if response.status == 200:
+                        result = await response.json()
+                        logger.info(f"[{current_time}] Response Text: {result}")
+                        
+                        # Check if we got file_id and message_id
+                        if result.get("status") == "ok" and result.get("file_id") and result.get("message_id"):
+                            return {
+                                "status": "ok",
+                                "file_id": result["file_id"],
+                                "message_id": result["message_id"]
+                            }
+                        else:
+                            logger.error(f"Invalid response format: {result}")
+                            return {"status": "failed", "error": "Invalid response format"}
+                    else:
+                        logger.error(f"HuggingFace returned status {response.status}")
+                        return {"status": "failed", "error": f"HuggingFace error: {response.status}"}
+            
+            except Exception as e:
+                logger.error(f"Request error: {str(e)}")
+                return {"status": "failed", "error": f"Request failed: {str(e)}"}
 
     except Exception as e:
-        logger.error(f"Error in send_to_huggingface: {e}")
+        logger.error(f"Error in send_to_huggingface: {str(e)}")
         return {"status": "failed", "error": str(e)}
