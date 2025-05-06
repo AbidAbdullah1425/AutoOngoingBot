@@ -33,18 +33,21 @@ async def send_to_huggingface(title: str, torrent_link: str):
             "Accept": "application/json"  # Add Accept header
         }
 
+        # Ensure URL ends with a slash
+        url = HUGGINGFACE_URL if HUGGINGFACE_URL.endswith('/') else f"{HUGGINGFACE_URL}/"
+
         async with ClientSession(timeout=TIMEOUT) as session:
             for attempt in range(3):
                 try:
-                    logger.info(f"Attempt {attempt + 1}/3 - Making request to {HUGGINGFACE_URL}")
+                    logger.info(f"Attempt {attempt + 1}/3 - Making request to {url}")
                     async with session.post(
-                        HUGGINGFACE_URL.rstrip('/'),  # Remove trailing slash if any
+                        url,  # Use the URL with trailing slash
                         data=data,
                         headers=headers,
                         allow_redirects=True  # Allow redirects
                     ) as response:
                         logger.info(f"[{current_time}] Response Status: {response.status}")
-                        
+
                         # Get response text first
                         text = await response.text()
                         logger.info(f"[{current_time}] Raw Response: {text}")
@@ -54,7 +57,7 @@ async def send_to_huggingface(title: str, torrent_link: str):
                                 import json
                                 result = json.loads(text)
                                 logger.info(f"[{current_time}] Parsed Response: {result}")
-                                
+
                                 if result.get("status") == "ok":
                                     return result
                                 else:
@@ -75,7 +78,7 @@ async def send_to_huggingface(title: str, torrent_link: str):
                             logger.error(f"HTTP {response.status}: {text}")
                             if attempt == 2:  # Last attempt
                                 return {"status": "failed", "error": f"HTTP {response.status}"}
-                
+
                 except asyncio.TimeoutError:
                     logger.error(f"Request timeout on attempt {attempt + 1}")
                     if attempt < 2:
@@ -84,7 +87,7 @@ async def send_to_huggingface(title: str, torrent_link: str):
                     logger.error(f"Request error on attempt {attempt + 1}: {str(e)}")
                     if attempt < 2:
                         await asyncio.sleep(5)
-                
+
                 # Wait between attempts
                 if attempt < 2:
                     await asyncio.sleep(5)
