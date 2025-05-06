@@ -12,7 +12,7 @@ logger = LOGGER(__name__)
 app = FastAPI()
 
 # Command to start RSS checking task
-@Bot.on_message(filters.command("taskon") & filters.private)
+@Bot.on_message(filters.command("taskon") & filters.private & filters.user(OWNER_ID))
 async def start_task(client, message):
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -28,7 +28,7 @@ async def start_task(client, message):
         await message.reply_text("❌ Failed to start RSS checker task!")
 
 # Command to stop RSS checking task
-@Bot.on_message(filters.command("taskoff") & filters.private)
+@Bot.on_message(filters.command("taskoff") & filters.private & filters.user(OWNER_ID))
 async def stop_task(client, message):
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -44,7 +44,7 @@ async def stop_task(client, message):
         await message.reply_text("❌ Failed to stop RSS checker task!")
 
 # Command to directly send torrent to HuggingFace
-@Bot.on_message(filters.command("torrent") & filters.private)
+@Bot.on_message(filters.command("torrent") & filters.private & filters.user(OWNER_ID))
 async def process_torrent(client, message):
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
