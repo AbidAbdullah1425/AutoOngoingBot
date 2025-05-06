@@ -20,59 +20,76 @@ async def send_to_huggingface(title: str, torrent_link: str):
         logger.info(f"  - CRF: 28")
         logger.info(f"  - Preset: ultrafast")
 
-        # Form data
+        # Form data - convert all values to strings to match curl behavior
         data = {
-            "title": title,
-            "torrent": torrent_link,
-            "crf": 28,
+            "title": str(title),
+            "torrent": str(torrent_link),
+            "crf": "28",  # Convert to string
             "preset": "ultrafast"
         }
 
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json"  # Add Accept header
         }
 
-        try:
-            async with ClientSession(timeout=TIMEOUT) as session:
-                for attempt in range(3):  # Try 3 times
-                    try:
-                        async with session.post(HUGGINGFACE_URL, data=data, headers=headers) as response:
-                            logger.info(f"[{current_time}] Response Status: {response.status}")
+        async with ClientSession(timeout=TIMEOUT) as session:
+            for attempt in range(3):
+                try:
+                    logger.info(f"Attempt {attempt + 1}/3 - Making request to {HUGGINGFACE_URL}")
+                    async with session.post(
+                        HUGGINGFACE_URL.rstrip('/'),  # Remove trailing slash if any
+                        data=data,
+                        headers=headers,
+                        allow_redirects=True  # Allow redirects
+                    ) as response:
+                        logger.info(f"[{current_time}] Response Status: {response.status}")
+                        
+                        # Get response text first
+                        text = await response.text()
+                        logger.info(f"[{current_time}] Raw Response: {text}")
 
-                            if response.status == 200:
-                                try:
-                                    result = await response.json()
-                                    logger.info(f"[{current_time}] Response Text: {result}")
+                        if response.status == 200:
+                            try:
+                                import json
+                                result = json.loads(text)
+                                logger.info(f"[{current_time}] Parsed Response: {result}")
+                                
+                                if result.get("status") == "ok":
+                                    return result
+                                else:
+                                    error_msg = result.get("error", "Unknown error")
+                                    logger.error(f"API Error: {error_msg}")
+                                    if attempt == 2:  # Last attempt
+                                        return {"status": "failed", "error": error_msg}
+                            except json.JSONDecodeError as e:
+                                logger.error(f"JSON Parse Error: {str(e)}, Response: {text}")
+                                if attempt == 2:
+                                    return {"status": "failed", "error": f"Invalid JSON response: {text[:100]}..."}
+                        elif response.status in [301, 302, 307, 308]:
+                            # Handle redirects manually if needed
+                            redirect_url = response.headers.get('Location')
+                            logger.info(f"Redirecting to: {redirect_url}")
+                            continue
+                        else:
+                            logger.error(f"HTTP {response.status}: {text}")
+                            if attempt == 2:  # Last attempt
+                                return {"status": "failed", "error": f"HTTP {response.status}"}
+                
+                except asyncio.TimeoutError:
+                    logger.error(f"Request timeout on attempt {attempt + 1}")
+                    if attempt < 2:
+                        await asyncio.sleep(5)
+                except Exception as e:
+                    logger.error(f"Request error on attempt {attempt + 1}: {str(e)}")
+                    if attempt < 2:
+                        await asyncio.sleep(5)
+                
+                # Wait between attempts
+                if attempt < 2:
+                    await asyncio.sleep(5)
 
-                                    if result.get("status") == "ok":
-                                        return result
-                                    else:
-                                        logger.error(f"Invalid response format: {result}")
-                                        return {"status": "failed", "error": result.get("error", "Unknown error")}
-                                except Exception as e:
-                                    logger.error(f"JSON decode error: {str(e)}")
-                                    continue
-                            else:
-                                logger.error(f"HTTP {response.status}: {await response.text()}")
-                                await asyncio.sleep(2)  # Wait before retry
-                                continue
-
-                    except asyncio.TimeoutError:
-                        logger.error(f"Request timeout on attempt {attempt + 1}")
-                        if attempt < 2:  # Don't sleep on last attempt
-                            await asyncio.sleep(5)
-                        continue
-                    except Exception as e:
-                        logger.error(f"Request error on attempt {attempt + 1}: {str(e)}")
-                        if attempt < 2:
-                            await asyncio.sleep(5)
-                        continue
-
-                return {"status": "failed", "error": "Failed after 3 attempts"}
-
-        except Exception as e:
-            logger.error(f"Session error: {str(e)}")
-            return {"status": "failed", "error": f"Connection error: {str(e)}"}
+            return {"status": "failed", "error": "All attempts failed"}
 
     except Exception as e:
         logger.error(f"Error in send_to_huggingface: {str(e)}")
