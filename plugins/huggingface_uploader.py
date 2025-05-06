@@ -28,18 +28,22 @@ async def send_to_huggingface(title: str, torrent_link: str):
             "preset": "ultrafast"
         }
 
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
         try:
             async with ClientSession(timeout=TIMEOUT) as session:
                 for attempt in range(3):  # Try 3 times
                     try:
-                        async with session.post(HUGGINGFACE_URL, data=data) as response:
+                        async with session.post(HUGGINGFACE_URL, data=data, headers=headers) as response:
                             logger.info(f"[{current_time}] Response Status: {response.status}")
-                            
+
                             if response.status == 200:
                                 try:
                                     result = await response.json()
                                     logger.info(f"[{current_time}] Response Text: {result}")
-                                    
+
                                     if result.get("status") == "ok":
                                         return result
                                     else:
@@ -52,7 +56,7 @@ async def send_to_huggingface(title: str, torrent_link: str):
                                 logger.error(f"HTTP {response.status}: {await response.text()}")
                                 await asyncio.sleep(2)  # Wait before retry
                                 continue
-                            
+
                     except asyncio.TimeoutError:
                         logger.error(f"Request timeout on attempt {attempt + 1}")
                         if attempt < 2:  # Don't sleep on last attempt
@@ -63,7 +67,7 @@ async def send_to_huggingface(title: str, torrent_link: str):
                         if attempt < 2:
                             await asyncio.sleep(5)
                         continue
-                
+
                 return {"status": "failed", "error": "Failed after 3 attempts"}
 
         except Exception as e:
