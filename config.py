@@ -17,7 +17,7 @@ TG_BOT_WORKERS = int(os.environ.get("TG_BOT_WORKERS", "1"))
 DB_URL = os.environ.get("DB_URL", "mongodb+srv://abidabdullahown7:abidabdullah1425@cluster0.7lgug.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 DB_NAME = os.environ.get("DB_NAME", "AUTO_ONGOING_BOT")
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "Goddo_YatoBot")
-HUGGINGFACE_URL = os.environ.get("HUGGINGFACE_URL", "https://abidabdullah199-Compressor.hf.space/")
+HUGGINGFACE_URL = os.environ.get("HUGGINGFACE_URL", "https://abidabdullah199-compressor.hf.space/")
 DB_CHANNEL_ID = int(os.environ.get("DB_CHANNEL_ID", "-1002689479503"))
 
 # Aria2 RPC configuration
