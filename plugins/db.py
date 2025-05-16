@@ -158,11 +158,17 @@ async def is_processed(hash):
         logger.error(f"[{current_time}] Error checking processed status for hash '{hash}': {str(e)}", exc_info=True)
         raise
 
-async def mark_processed(hash):
+async def mark_processed(hash, data=None):
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     try:
         logger.info(f"[{current_time}] Marking hash as processed: {hash}")
-        result = await db.processed.insert_one({"hash": hash})
+        
+        # Create document with hash and additional data if provided
+        document = {"hash": hash}
+        if data:
+            document.update(data)
+            
+        result = await db.processed.insert_one(document)
         
         logger.debug(f"[{current_time}] Successfully marked hash as processed: {hash}, ID: {result.inserted_id}")
         return result.inserted_id
