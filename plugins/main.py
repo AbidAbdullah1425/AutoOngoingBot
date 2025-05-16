@@ -47,7 +47,12 @@ async def stop_task(client, message):
         logger.info(f"[{current_time}] Received taskoff command from user {user_id}")
         
         result = await stop_rss_checker()
-        await message.reply_text("✅ RSS Checker task stopped successfully!")
+        
+        if result and result.get("status") == "ok":
+            await message.reply_text("✅ RSS Checker task stopped successfully!")
+        else:
+            error = result.get("error", "Unknown error") if result else "No response"
+            await message.reply_text(f"❌ Failed to stop RSS checker task: {error}")
         
     except Exception as e:
         logger.error(f"Error in taskoff command: {str(e)}")
