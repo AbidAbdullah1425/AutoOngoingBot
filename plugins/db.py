@@ -1,6 +1,7 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import DB_URL, DB_NAME, LOGGER
 from datetime import datetime, timezone
+from bot import Bot
 
 # Initialize logger for this module
 logger = LOGGER(__name__)
