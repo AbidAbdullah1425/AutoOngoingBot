@@ -13,9 +13,7 @@ logger = LOGGER(__name__)
 
 RSS_URL = "https://subsplease.org/rss/?t&r=720"
 _rss_task = None
-_latest_processed = None
 
-# Encode function for creating shareable links
 async def encode(string):
     return b64encode(string.encode()).decode()
 
@@ -45,8 +43,6 @@ async def create_share_link(message_id):
 
 async def check_rss_feed(client):
     """RSS feed checker function"""
-    global _latest_processed
-    
     while True:
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -84,34 +80,38 @@ async def check_rss_feed(client):
                             result = await send_to_huggingface(title, direct_link)
                             
                             if result and result.get("status") == "ok":
-                                # Store the latest processed result
-                                _latest_processed = {
-                                    "title": title,
-                                    "file_id": result.get("file_id"),
-                                    "message_id": result.get("message_id"),
-                                    "torrent_id": torrent_id
-                                }
+                                # Get the file_id and message_id from HuggingFace result
+                                file_id = result.get("file_id")
+                                message_id = result.get("message_id")
                                 
-                                # Mark as processed with all info
-                                await mark_processed(guid, _latest_processed)
-                                
-                                # Create and send share link to admins
-                                share_result = await create_share_link(_latest_processed["message_id"])
-                                if share_result["status"] == "ok":
-                                    _latest_processed["share_link"] = share_result["link"]
+                                if file_id and message_id:
+                                    # Create shareable link
+                                    share_result = await create_share_link(message_id)
                                     
-                                    # Send notification to admins
-                                    for admin in Bot.admins:
-                                        try:
-                                            await client.send_message(
-                                                chat_id=admin,
-                                                text=f"✅ New file processed: {title}\n\nShare Link: {share_result['link']}",
-                                                reply_markup=share_result["reply_markup"]
-                                            )
-                                        except Exception as e:
-                                            logger.error(f"Failed to notify admin {admin}: {str(e)}")
-                                
-                                logger.info(f"Successfully processed: {title}")
+                                    if share_result["status"] == "ok":
+                                        # Store processed info
+                                        await mark_processed(guid, {
+                                            "title": title,
+                                            "file_id": file_id,
+                                            "message_id": message_id,
+                                            "share_link": share_result["link"],
+                                            "torrent_id": torrent_id
+                                        })
+                                        
+                                        # Send notification to admins
+                                        for admin in Bot.admins:
+                                            try:
+                                                await client.send_message(
+                                                    chat_id=admin,
+                                                    text=f"✅ New file processed: {title}\n\nShare Link: {share_result['link']}",
+                                                    reply_markup=share_result["reply_markup"]
+                                                )
+                                            except Exception as e:
+                                                logger.error(f"Failed to notify admin {admin}: {str(e)}")
+                                        
+                                        logger.info(f"Successfully processed: {title}")
+                                else:
+                                    logger.error(f"Missing file_id or message_id for {title}")
                             else:
                                 error = result.get("error", "Unknown error") if result else "No response"
                                 logger.error(f"Failed to process {title}: {error}")
@@ -130,41 +130,21 @@ async def check_rss_feed(client):
 
 async def start_rss_checker(client):
     """Start the RSS checker task"""
-    global _rss_task, _latest_processed
+    global _rss_task
     
     try:
         if _rss_task and not _rss_task.done():
-            # If task is already running and we have latest processed info
-            if _latest_processed:
-                share_result = await create_share_link(_latest_processed["message_id"])
-                if share_result["status"] == "ok":
-                    return {
-                        "status": "ok",
-                        "file_id": _latest_processed["file_id"],
-                        "message_id": _latest_processed["message_id"],
-                        "share_link": share_result["link"],
-                        "reply_markup": share_result["reply_markup"]
-                    }
-            
-            # If no latest processed, return task info
             return {
                 "status": "ok",
-                "file_id": "ongoing_task",
-                "message_id": int(datetime.now().timestamp()),
-                "info": "Task already running"
+                "message": "RSS checker task is already running"
             }
             
         _rss_task = asyncio.create_task(check_rss_feed(client))
-        task_id = int(datetime.now().timestamp())
-        _rss_task.set_name(f"rss_task_{task_id}")
         logger.info("RSS checker task started")
         
-        # Return initial success result
         return {
             "status": "ok",
-            "file_id": "new_task",
-            "message_id": task_id,
-            "info": "Task started successfully"
+            "message": "RSS checker task started successfully"
         }
         
     except Exception as e:
