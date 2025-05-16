@@ -1,6 +1,6 @@
 from plugins.db import get_tracked_titles, is_processed, mark_processed
 from plugins.huggingface_uploader import send_to_huggingface
-from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID
+from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, OWNER_ID
 import feedparser
 import asyncio
 import traceback
@@ -98,16 +98,14 @@ async def check_rss_feed(client):
                                             "torrent_id": torrent_id
                                         })
                                         
-                                        # Send notification to admins
-
-
-
-if isinstance(OWNER_ID, list):
-    admin_list = OWNER_ID
-else:
-    admin_list = [OWNER_ID]
-
-                                        for admin in Bot.admins:
+                                        # Convert OWNER_ID to list if it's not already
+                                        if isinstance(OWNER_ID, list):
+                                            admin_list = OWNER_ID
+                                        else:
+                                            admin_list = [OWNER_ID]
+                                        
+                                        # Send notification to admin(s)
+                                        for admin in admin_list:
                                             try:
                                                 await client.send_message(
                                                     chat_id=admin,
