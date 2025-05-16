@@ -24,29 +24,11 @@ async def start_task(client, message):
         result = await start_rss_checker(client)
         
         if result and result.get("status") == "ok":
-            # Generate shareable link
-            file_id = result.get("file_id")
-            message_id = result.get("message_id")
-            
-            if file_id and message_id:
-                # Generate base64 string using DB_CHANNEL_ID from config
-                base64_string = await encode(f"get-{message_id * abs(DB_CHANNEL_ID)}")
-                
-                # Create shareable link using BOT_USERNAME from config
-                link = f"https://t.me/{BOT_USERNAME}?start={base64_string}"
-                
-                # Create button markup
-                reply_markup = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔁 Share URL", 
-                        url=f'https://telegram.me/share/url?url={link}')
-                ]])
-
-                await message.reply_text(
-                    f"✅ RSS Checker task started successfully!\n\nShare Link: {link}",
-                    reply_markup=reply_markup
-                )
-            else:
-                await message.reply_text("✅ RSS Checker task started but failed to generate link: Missing file_id or message_id")
+            # Simply show the success message returned by start_rss_checker
+            await message.reply_text(
+                f"✅ {result.get('message', 'RSS Checker task started successfully!')}\n\n" +
+                "You will receive notifications with shareable links when new files are processed."
+            )
         else:
             error = result.get("error", "Unknown error") if result else "No response"
             await message.reply_text(f"❌ Failed to start RSS checker task: {error}")
