@@ -99,6 +99,14 @@ async def check_rss_feed(client):
                                         })
                                         
                                         # Send notification to admins
+
+
+
+if isinstance(OWNER_ID, list):
+    admin_list = OWNER_ID
+else:
+    admin_list = [OWNER_ID]
+
                                         for admin in Bot.admins:
                                             try:
                                                 await client.send_message(
