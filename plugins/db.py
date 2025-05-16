@@ -1,6 +1,6 @@
 from pyrogram import Client, filters
 from motor.motor_asyncio import AsyncIOMotorClient
-from config import DB_URL, DB_NAME, LOGGER
+from config import DB_URL, DB_NAME, LOGGER, OWNER_ID
 from datetime import datetime, timezone
 from bot import Bot
 
