@@ -1,80 +1,75 @@
-import aiohttp
+from config import LOGGER, ANILIST_API
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from typing import Dict, Optional
-import re
-from config import LOGGER, MAIN_CHANNEL
+from typing import Dict, List
+import aiohttp
+import json
 
 logger = LOGGER(__name__)
 
 class AnimeInfo:
-    ANILIST_API = "https://graphql.anilist.co"
-    
     @staticmethod
     async def extract_info_from_filename(filename: str) -> Dict:
-        """Extract anime name and episode from filename"""
+        """Extract anime name and episode number from filename"""
         try:
-            # Remove release group and quality info
-            clean_name = re.sub(r'\[.*?\]', '', filename).strip()
-            parts = re.split(r'\s*-\s*', clean_name)
+            # Remove [SubsPlease] and quality tag
+            name = filename.replace("[SubsPlease]", "").split("[")[0].strip()
             
-            if len(parts) >= 2:
-                anime_name = parts[0].strip()
-                ep_match = re.search(r'(\d+)', parts[1])
-                episode = ep_match.group(1) if ep_match else None
+            # Split into name and episode
+            parts = name.rsplit(" - ", 1)
+            if len(parts) != 2:
+                return {"success": False}
                 
-                return {
-                    "success": True,
-                    "anime_name": anime_name,
-                    "episode": episode
-                }
+            anime_name = parts[0].strip()
+            episode = parts[1].strip()
+            
+            return {
+                "success": True,
+                "anime_name": anime_name,
+                "episode": episode
+            }
         except Exception as e:
-            logger.error(f"Error extracting anime info: {str(e)}")
-        
-        return {"success": False}
+            logger.error(f"Error extracting info from filename: {str(e)}")
+            return {"success": False}
 
     @staticmethod
     async def get_anime_data(anime_name: str) -> Dict:
-        """Fetch anime data from AniList"""
-        query = """
+        """Get anime info from Anilist"""
+        query = '''
         query ($search: String) {
-          Media(search: $search, type: ANIME) {
-            id
-            title {
-              romaji
-              english
-              native
+            Media (search: $search, type: ANIME) {
+                id
+                title {
+                    romaji
+                    english
+                }
+                status
+                description
+                averageScore
+                genres
+                siteUrl
             }
-            description
-            status
-            averageScore
-            episodes
-            genres
-            siteUrl
-            coverImage {
-              large
-            }
-          }
         }
-        """
+        '''
         
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    AnimeInfo.ANILIST_API,
-                    json={'query': query, 'variables': {'search': anime_name}}
-                ) as response:
-                    data = await response.json()
-                    
-                    if 'errors' in data:
-                        logger.error(f"AniList API error: {data['errors']}")
-                        return {"success": False}
-                    
-                    return {
-                        "success": True,
-                        "data": data['data']['Media']
+                    ANILIST_API,
+                    json={
+                        'query': query,
+                        'variables': {'search': anime_name}
                     }
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return {
+                            "success": True,
+                            "data": data['data']['Media']
+                        }
+                    else:
+                        return {"success": False}
         except Exception as e:
-            logger.error(f"Error fetching anime data: {str(e)}")
+            logger.error(f"Error getting anime data: {str(e)}")
             return {"success": False}
 
     @staticmethod
@@ -84,19 +79,23 @@ class AnimeInfo:
             # Capitalize first letter of each genre
             genres = [genre.capitalize() for genre in anime_data['genres']]
             
-            # Truncate synopsis and add read more link
+            # Get the cover image from anilist media ID
+            media_id = anime_data.get('id')
+            cover_url = f"https://img.anili.st/media/{media_id}"
+            
+            # Truncate synopsis and add read more link with HTML
             synopsis = anime_data['description']
             if synopsis and len(synopsis) > 150:
-                synopsis = f"{synopsis[:150]}...\n[Read More]({anime_data['siteUrl']})"
+                synopsis = f"{synopsis[:150]}...\n<a href='{anime_data['siteUrl']}'>Read More</a>"
             
             post_text = (
-                f"☗   {anime_data['title']['english'] or anime_data['title']['romaji']}\n\n"
-                f"⦿   Ratings: {anime_data['averageScore']/10:.1f}\n"
-                f"⦿   Status: {anime_data['status'].capitalize()}\n"
-                f"⦿   Episode: {episode}\n"
-                f"⦿   Quality: 720p\n"
-                f"⦿   Genres: {', '.join(genres)}\n\n"
-                f"◆   Synopsis: {synopsis}"
+                f"<b>☗   {anime_data['title']['english'] or anime_data['title']['romaji']}</b>\n\n"
+                f"<b>⦿   Ratings:</b> {anime_data['averageScore']/10:.1f}\n"
+                f"<b>⦿   Status:</b> {anime_data['status'].capitalize()}\n"
+                f"<b>⦿   Episode:</b> {episode}\n"
+                f"<b>⦿   Quality:</b> 720p\n"
+                f"<b>⦿   Genres:</b> {', '.join(genres)}\n\n"
+                f"<b>◆   Synopsis:</b> {synopsis}"
             )
             
             buttons = [[
@@ -110,7 +109,7 @@ class AnimeInfo:
                 "success": True,
                 "text": post_text,
                 "buttons": buttons,
-                "cover_url": anime_data['coverImage']['large']
+                "cover_url": cover_url  # Using anilist media ID for cover
             }
         except Exception as e:
             logger.error(f"Error formatting post: {str(e)}")
