@@ -1,11 +1,12 @@
 from plugins.db import get_tracked_titles, is_torrent_processed, mark_torrent_processed
 from plugins.huggingface_uploader import send_to_huggingface
+from plugins.anime_utils import AnimeInfo
 from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, OWNER_ID
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import feedparser
 import asyncio
 import traceback
 from datetime import datetime, timezone
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from base64 import b64encode
 from bot import Bot
 
@@ -40,6 +41,21 @@ async def create_share_link(message_id):
     except Exception as e:
         logger.error(f"Error creating share link: {str(e)}")
         return {"status": "error", "error": str(e)}
+
+async def send_simple_notification(client, admin_list, title, torrent_id, share_result):
+    """Send simple notification without anime info"""
+    for admin in admin_list:
+        try:
+            await client.send_message(
+                chat_id=admin,
+                text=f"✅ New file processed:\n\n"
+                     f"Title: {title}\n"
+                     f"Torrent ID: {torrent_id}\n"
+                     f"Share Link: {share_result['link']}",
+                reply_markup=share_result["reply_markup"]
+            )
+        except Exception as e:
+            logger.error(f"Failed to send simple notification to admin {admin}: {str(e)}")
 
 async def check_rss_feed(client):
     while True:
@@ -92,34 +108,51 @@ async def check_rss_feed(client):
                                     share_result = await create_share_link(message_id)
                                     
                                     if share_result["status"] == "ok":
-                                        # Mark torrent as processed with all info
-                                        await mark_torrent_processed(
-                                            torrent_id=torrent_id,
-                                            title=title,
-                                            file_id=file_id,
-                                            message_id=message_id,
-                                            share_link=share_result["link"]
-                                        )
-                                        
-                                        # Send notification to admin(s)
-                                        if isinstance(OWNER_ID, list):
-                                            admin_list = OWNER_ID
-                                        else:
-                                            admin_list = [OWNER_ID]
-                                        
-                                        for admin in admin_list:
-                                            try:
-                                                await client.send_message(
-                                                    chat_id=admin,
-                                                    text=f"✅ New file processed:\n\n"
-                                                         f"Title: {title}\n"
-                                                         f"Torrent ID: {torrent_id}\n"
-                                                         f"Share Link: {share_result['link']}",
-                                                    reply_markup=share_result["reply_markup"]
-                                                )
-                                            except Exception as e:
-                                                logger.error(f"Failed to notify admin {admin}: {str(e)}")
-                        
+                                        # Process anime info and create formatted post
+                                        try:
+                                            # Extract anime info from filename
+                                            anime_info = await AnimeInfo.extract_info_from_filename(title)
+                                            if anime_info["success"]:
+                                                # Get anime data from AniList
+                                                anime_data = await AnimeInfo.get_anime_data(anime_info["anime_name"])
+                                                if anime_data["success"]:
+                                                    # Format post with anime data
+                                                    post_data = await AnimeInfo.format_post(
+                                                        anime_data["data"],
+                                                        anime_info["episode"],
+                                                        share_result["link"]
+                                                    )
+                                                    
+                                                    if post_data["success"]:
+                                                        # Mark torrent as processed
+                                                        await mark_torrent_processed(
+                                                            torrent_id=torrent_id,
+                                                            title=title,
+                                                            file_id=file_id,
+                                                            message_id=message_id,
+                                                            share_link=share_result["link"]
+                                                        )
+                                                        
+                                                        # Send formatted notification to admin(s)
+                                                        for admin in admin_list:
+                                                            try:
+                                                                await client.send_photo(
+                                                                    chat_id=admin,
+                                                                    photo=post_data["cover_url"],
+                                                                    caption=post_data["text"],
+                                                                    reply_markup=InlineKeyboardMarkup(post_data["buttons"])
+                                                                )
+                                                            except Exception as e:
+                                                                logger.error(f"Failed to notify admin {admin}: {str(e)}")
+                                                        continue
+                                            
+                                            # If any step fails, fall back to simple notification
+                                            await send_simple_notification(client, admin_list, title, torrent_id, share_result)
+                                            
+                                        except Exception as e:
+                                            logger.error(f"Error processing anime info: {str(e)}")
+                                            await send_simple_notification(client, admin_list, title, torrent_id, share_result)
+                                            
                         except Exception as e:
                             logger.error(f"Error processing torrent {torrent_id}: {str(e)}")
                             logger.error(traceback.format_exc())
