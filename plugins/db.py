@@ -178,3 +178,34 @@ async def mark_processed(hash, data=None):
         raise
 
 
+#newly added
+async def is_torrent_processed(torrent_id):
+    """Check if a torrent ID has been processed"""
+    try:
+        result = await db.processed_torrents.find_one({"torrent_id": str(torrent_id)})
+        return bool(result)
+    except Exception as e:
+        logger.error(f"Error checking torrent status: {str(e)}")
+        return False
+
+async def mark_torrent_processed(torrent_id, title, file_id=None, message_id=None, share_link=None):
+    """Mark a torrent as processed with all relevant information"""
+    try:
+        document = {
+            "torrent_id": str(torrent_id),
+            "title": title,
+            "processed_at": datetime.now(timezone.utc),
+            "file_id": file_id,
+            "message_id": message_id,
+            "share_link": share_link,
+            "nyaa_link": f"https://nyaa.si/view/{torrent_id}"
+        }
+        
+        result = await db.processed_torrents.insert_one(document)
+        logger.info(f"Marked torrent {torrent_id} as processed")
+        return result.inserted_id
+    except Exception as e:
+        logger.error(f"Error marking torrent as processed: {str(e)}")
+        raise
+
+
