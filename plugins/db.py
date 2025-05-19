@@ -209,3 +209,13 @@ async def mark_torrent_processed(torrent_id, title, file_id=None, message_id=Non
         raise
 
 
+
+async def setup_database():
+    try:
+        # Create unique index on torrent_id
+        await db.processed_torrents.create_index("torrent_id", unique=True)
+        logger.info("Database indexes created successfully")
+    except Exception as e:
+        logger.error(f"Error setting up database: {str(e)}")
+
+
