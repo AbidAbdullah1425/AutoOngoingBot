@@ -1,6 +1,6 @@
 from aiohttp import ClientSession, ClientTimeout
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from config import LOGGER, HUGGINGFACE_URL
+from config import LOGGER, HUGGINGFACE_URL, LOG_CHANNEL
 from datetime import datetime, timezone
 import asyncio
 
@@ -9,7 +9,7 @@ logger = LOGGER(__name__)
 # Set a longer timeout
 TIMEOUT = ClientTimeout(total=600)  # 10 minutes timeout
 
-async def send_to_huggingface(title: str, torrent_link: str):
+async def send_to_huggingface(title: str, torrent_link: str, client=None):
     try:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         logger.info(f"[{current_time}] Starting request to HuggingFace Space")
@@ -38,63 +38,92 @@ async def send_to_huggingface(title: str, torrent_link: str):
         url = HUGGINGFACE_URL if HUGGINGFACE_URL.endswith('/') else f"{HUGGINGFACE_URL}/"
 
         async with ClientSession(timeout=TIMEOUT) as session:
-            for attempt in range(3):
-                try:
-                    logger.info(f"Attempt {attempt + 1}/3 - Making request to {url}")
-                    async with session.post(
-                        url,  # Use the URL with trailing slash
-                        data=data,
-                        headers=headers,
-                        allow_redirects=True  # Allow redirects
-                    ) as response:
-                        logger.info(f"[{current_time}] Response Status: {response.status}")
+            try:
+                logger.info(f"Making request to {url}")
+                async with session.post(
+                    url,  # Use the URL with trailing slash
+                    data=data,
+                    headers=headers,
+                    allow_redirects=True  # Allow redirects
+                ) as response:
+                    logger.info(f"[{current_time}] Response Status: {response.status}")
 
-                        # Get response text first
-                        text = await response.text()
-                        logger.info(f"[{current_time}] Raw Response: {text}")
+                    # Get response text first
+                    text = await response.text()
+                    logger.info(f"[{current_time}] Raw Response: {text}")
 
-                        if response.status == 200:
-                            try:
-                                import json
-                                result = json.loads(text)
-                                logger.info(f"[{current_time}] Parsed Response: {result}")
+                    # Prepare error message for LOG_CHANNEL
+                    error_message = (
+                        f"🤖 HuggingFace Upload Report\n\n"
+                        f"🎥 File: {title}\n"
+                        f"⏰ Time: {current_time}\n"
+                        f"📊 Status: {response.status}\n"
+                    )
 
-                                if result.get("status") == "ok":
-                                    return result
-                                else:
-                                    error_msg = result.get("error", "Unknown error")
-                                    logger.error(f"API Error: {error_msg}")
-                                    if attempt == 2:  # Last attempt
-                                        return {"status": "failed", "error": error_msg}
-                            except json.JSONDecodeError as e:
-                                logger.error(f"JSON Parse Error: {str(e)}, Response: {text}")
-                                if attempt == 2:
-                                    return {"status": "failed", "error": f"Invalid JSON response: {text[:100]}..."}
-                        elif response.status in [301, 302, 307, 308]:
-                            # Handle redirects manually if needed
-                            redirect_url = response.headers.get('Location')
-                            logger.info(f"Redirecting to: {redirect_url}")
-                            continue
-                        else:
-                            logger.error(f"HTTP {response.status}: {text}")
-                            if attempt == 2:  # Last attempt
-                                return {"status": "failed", "error": f"HTTP {response.status}"}
+                    if response.status == 200:
+                        try:
+                            import json
+                            result = json.loads(text)
+                            logger.info(f"[{current_time}] Parsed Response: {result}")
 
-                except asyncio.TimeoutError:
-                    logger.error(f"Request timeout on attempt {attempt + 1}")
-                    if attempt < 2:
-                        await asyncio.sleep(5)
-                except Exception as e:
-                    logger.error(f"Request error on attempt {attempt + 1}: {str(e)}")
-                    if attempt < 2:
-                        await asyncio.sleep(5)
+                            if result.get("status") == "ok":
+                                if client and LOG_CHANNEL:
+                                    await client.send_message(
+                                        LOG_CHANNEL,
+                                        f"{error_message}✅ Success: File processed successfully"
+                                    )
+                                return result
+                            else:
+                                error_msg = result.get("error", "Unknown error")
+                                if client and LOG_CHANNEL:
+                                    await client.send_message(
+                                        LOG_CHANNEL,
+                                        f"{error_message}❌ API Error: {error_msg}"
+                                    )
+                                return {"status": "failed", "error": error_msg}
+                        except json.JSONDecodeError as e:
+                            error_msg = f"JSON Parse Error: {str(e)}, Response: {text[:500]}..."
+                            if client and LOG_CHANNEL:
+                                await client.send_message(
+                                    LOG_CHANNEL,
+                                    f"{error_message}❌ Error: {error_msg}"
+                                )
+                            return {"status": "failed", "error": error_msg}
+                    else:
+                        error_msg = f"HTTP {response.status}: {text[:500]}..."
+                        if client and LOG_CHANNEL:
+                            await client.send_message(
+                                LOG_CHANNEL,
+                                f"{error_message}❌ Error: {error_msg}"
+                            )
+                        return {"status": "failed", "error": error_msg}
 
-                # Wait between attempts
-                if attempt < 2:
-                    await asyncio.sleep(5)
-
-            return {"status": "failed", "error": "All attempts failed"}
+            except asyncio.TimeoutError as e:
+                error_msg = f"Request timeout: {str(e)}"
+                if client and LOG_CHANNEL:
+                    await client.send_message(
+                        LOG_CHANNEL,
+                        f"{error_message}⏱️ Timeout Error: {error_msg}"
+                    )
+                return {"status": "failed", "error": error_msg}
+            except Exception as e:
+                error_msg = f"Request error: {str(e)}"
+                if client and LOG_CHANNEL:
+                    await client.send_message(
+                        LOG_CHANNEL,
+                        f"{error_message}❌ Error: {error_msg}"
+                    )
+                return {"status": "failed", "error": error_msg}
 
     except Exception as e:
-        logger.error(f"Error in send_to_huggingface: {str(e)}")
-        return {"status": "failed", "error": str(e)}
+        error_msg = f"Error in send_to_huggingface: {str(e)}"
+        logger.error(error_msg)
+        if client and LOG_CHANNEL:
+            await client.send_message(
+                LOG_CHANNEL,
+                f"❌ General Error\n\n"
+                f"🎥 File: {title}\n"
+                f"⏰ Time: {current_time}\n"
+                f"❌ Error: {error_msg}"
+            )
+        return {"status": "failed", "error": error_msg}
