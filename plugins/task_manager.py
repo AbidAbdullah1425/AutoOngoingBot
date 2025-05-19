@@ -1,13 +1,14 @@
 from plugins.db import get_tracked_titles, is_torrent_processed, mark_torrent_processed
 from plugins.huggingface_uploader import send_to_huggingface
 from plugins.anime_utils import AnimeInfo
-from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, OWNER_ID
+from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, OWNER_ID, HUGGINGFACE_URL
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import feedparser
 import asyncio
 import traceback
 from datetime import datetime, timezone
 from base64 import b64encode
+import aiohttp
 from bot import Bot
 
 logger = LOGGER(__name__)
@@ -21,18 +22,12 @@ async def encode(string):
 async def create_share_link(message_id):
     """Create a shareable link from a message ID"""
     try:
-        # Generate base64 string using DB_CHANNEL_ID
         base64_string = await encode(f"get-{message_id * abs(DB_CHANNEL_ID)}")
-        
-        # Create shareable link using BOT_USERNAME
         link = f"https://t.me/{BOT_USERNAME}?start={base64_string}"
-        
-        # Create button markup
         reply_markup = InlineKeyboardMarkup([[
             InlineKeyboardButton("🔁 Share URL", 
                 url=f'https://telegram.me/share/url?url={link}')
         ]])
-        
         return {
             "status": "ok",
             "link": link,
@@ -42,20 +37,15 @@ async def create_share_link(message_id):
         logger.error(f"Error creating share link: {str(e)}")
         return {"status": "error", "error": str(e)}
 
-async def send_simple_notification(client, admin_list, title, torrent_id, share_result):
-    """Send simple notification without anime info"""
-    for admin in admin_list:
-        try:
-            await client.send_message(
-                chat_id=admin,
-                text=f"✅ New file processed:\n\n"
-                     f"Title: {title}\n"
-                     f"Torrent ID: {torrent_id}\n"
-                     f"Share Link: {share_result['link']}",
-                reply_markup=share_result["reply_markup"]
-            )
-        except Exception as e:
-            logger.error(f"Failed to send simple notification to admin {admin}: {str(e)}")
+async def check_space_status():
+    """Check if HuggingFace Space is ready"""
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(HUGGINGFACE_URL) as response:
+                return response.status == 200
+    except:
+        return False
 
 async def check_rss_feed(client):
     while True:
@@ -63,6 +53,12 @@ async def check_rss_feed(client):
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             logger.info(f"[{current_time}] Checking RSS feed")
             
+            # Set up admin list
+            if isinstance(OWNER_ID, list):
+                admin_list = OWNER_ID
+            else:
+                admin_list = [OWNER_ID]
+
             feed = feedparser.parse(RSS_URL)
             if feed.bozo:
                 logger.error(f"RSS Feed parsing error: {feed.bozo_exception}")
@@ -76,27 +72,32 @@ async def check_rss_feed(client):
                 title = item.title
                 link = item.link
                 
-                # Extract torrent ID
                 try:
                     torrent_id = link.split('/view/')[1].split('/')[0]
                 except IndexError:
                     logger.error(f"Could not extract torrent ID from {link}")
                     continue
                 
-                # Check for tracked titles
                 for tracked in titles:
                     if tracked.lower() in title.lower():
                         logger.info(f"Match found! '{tracked}' in '{title}'")
                         
-                        # Check if already processed using torrent ID
                         if await is_torrent_processed(torrent_id):
                             logger.info(f"Skipping already processed torrent: {torrent_id} - {title}")
                             continue
                         
                         try:
+                            # Check if Space is ready
+                            if not await check_space_status():
+                                logger.error("HuggingFace Space is not ready")
+                                for admin in admin_list:
+                                    await client.send_message(
+                                        chat_id=admin,
+                                        text="⚠️ HuggingFace Space is not ready. Waiting for next cycle."
+                                    )
+                                continue
+
                             direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
-                            
-                            # Send to HuggingFace
                             result = await send_to_huggingface(title, direct_link)
                             
                             if result and result.get("status") == "ok":
@@ -104,19 +105,24 @@ async def check_rss_feed(client):
                                 message_id = result.get("message_id")
                                 
                                 if file_id and message_id:
-                                    # Create shareable link
                                     share_result = await create_share_link(message_id)
                                     
                                     if share_result["status"] == "ok":
-                                        # Process anime info and create formatted post
                                         try:
-                                            # Extract anime info from filename
+                                            # Mark as processed first to avoid duplicates
+                                            await mark_torrent_processed(
+                                                torrent_id=torrent_id,
+                                                title=title,
+                                                file_id=file_id,
+                                                message_id=message_id,
+                                                share_link=share_result["link"]
+                                            )
+
+                                            # Get anime info
                                             anime_info = await AnimeInfo.extract_info_from_filename(title)
                                             if anime_info["success"]:
-                                                # Get anime data from AniList
                                                 anime_data = await AnimeInfo.get_anime_data(anime_info["anime_name"])
                                                 if anime_data["success"]:
-                                                    # Format post with anime data
                                                     post_data = await AnimeInfo.format_post(
                                                         anime_data["data"],
                                                         anime_info["episode"],
@@ -124,16 +130,6 @@ async def check_rss_feed(client):
                                                     )
                                                     
                                                     if post_data["success"]:
-                                                        # Mark torrent as processed
-                                                        await mark_torrent_processed(
-                                                            torrent_id=torrent_id,
-                                                            title=title,
-                                                            file_id=file_id,
-                                                            message_id=message_id,
-                                                            share_link=share_result["link"]
-                                                        )
-                                                        
-                                                        # Send formatted notification to admin(s)
                                                         for admin in admin_list:
                                                             try:
                                                                 await client.send_photo(
@@ -143,16 +139,43 @@ async def check_rss_feed(client):
                                                                     reply_markup=InlineKeyboardMarkup(post_data["buttons"])
                                                                 )
                                                             except Exception as e:
-                                                                logger.error(f"Failed to notify admin {admin}: {str(e)}")
-                                                        continue
-                                            
-                                            # If any step fails, fall back to simple notification
-                                            await send_simple_notification(client, admin_list, title, torrent_id, share_result)
-                                            
+                                                                logger.error(f"Failed to send formatted message: {str(e)}")
+                                                                # Fallback to simple message
+                                                                await client.send_message(
+                                                                    chat_id=admin,
+                                                                    text=f"✅ New file processed:\n\n"
+                                                                         f"Title: {title}\n"
+                                                                         f"Share Link: {share_result['link']}",
+                                                                    reply_markup=share_result["reply_markup"]
+                                                                )
+                                                    else:
+                                                        raise Exception("Failed to format post")
+                                                else:
+                                                    raise Exception("Failed to get anime data")
+                                            else:
+                                                raise Exception("Failed to extract anime info")
+                                                
                                         except Exception as e:
-                                            logger.error(f"Error processing anime info: {str(e)}")
-                                            await send_simple_notification(client, admin_list, title, torrent_id, share_result)
-                                            
+                                            logger.error(f"Error in anime processing: {str(e)}")
+                                            # Send simple notification on error
+                                            for admin in admin_list:
+                                                await client.send_message(
+                                                    chat_id=admin,
+                                                    text=f"✅ New file processed:\n\n"
+                                                         f"Title: {title}\n"
+                                                         f"Share Link: {share_result['link']}",
+                                                    reply_markup=share_result["reply_markup"]
+                                                )
+                            elif result and result.get("status") == "error":
+                                logger.error(f"HuggingFace error: {result.get('error')}")
+                                for admin in admin_list:
+                                    await client.send_message(
+                                        chat_id=admin,
+                                        text=f"❌ Failed to process file:\n\n"
+                                             f"Title: {title}\n"
+                                             f"Error: {result.get('error')}"
+                                    )
+                                    
                         except Exception as e:
                             logger.error(f"Error processing torrent {torrent_id}: {str(e)}")
                             logger.error(traceback.format_exc())
