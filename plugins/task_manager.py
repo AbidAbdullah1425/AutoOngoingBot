@@ -125,7 +125,7 @@ async def check_rss_feed(client):
                                                         for admin in admin_list:
                                                             try:
                                                                 await client.send_photo(
-                                                                    chat_id=admin,
+                                                                    chat_id=MAIN_CHANNEL,
                                                                     photo=post_data["cover_url"],
                                                                     caption=post_data["text"],
                                                                     reply_markup=InlineKeyboardMarkup(post_data["buttons"])
