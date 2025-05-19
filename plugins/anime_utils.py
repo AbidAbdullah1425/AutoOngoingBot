@@ -89,7 +89,7 @@ class AnimeInfo:
                 synopsis = f"{synopsis[:150]}...\n<a href='{anime_data['siteUrl']}'>Read More</a>"
             
             post_text = (
-                f"<b>☗   {anime_data['title']['english'] or anime_data['title']['romaji']}</b>\n\n"
+                f"<b><blockquote>☗   {anime_data['title']['english'] or anime_data['title']['romaji']}</blockquote></b>\n\n"
                 f"<b>⦿   Ratings:</b> {anime_data['averageScore']/10:.1f}\n"
                 f"<b>⦿   Status:</b> {anime_data['status'].capitalize()}\n"
                 f"<b>⦿   Episode:</b> {episode}\n"
