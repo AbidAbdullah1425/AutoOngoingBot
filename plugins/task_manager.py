@@ -42,7 +42,6 @@ async def create_share_link(message_id):
         return {"status": "error", "error": str(e)}
 
 async def check_rss_feed(client):
-    """RSS feed checker function"""
     while True:
         try:
             current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -60,27 +59,31 @@ async def check_rss_feed(client):
             for item in feed.entries:
                 title = item.title
                 link = item.link
-                guid = item.guid
                 
+                # Extract torrent ID
+                try:
+                    torrent_id = link.split('/view/')[1].split('/')[0]
+                except IndexError:
+                    logger.error(f"Could not extract torrent ID from {link}")
+                    continue
+                
+                # Check for tracked titles
                 for tracked in titles:
                     if tracked.lower() in title.lower():
                         logger.info(f"Match found! '{tracked}' in '{title}'")
                         
-                        # Skip if already processed
-                        if await is_processed(guid):
-                            logger.info(f"Skipping already processed: {title}")
+                        # Check if already processed using torrent ID
+                        if await is_torrent_processed(torrent_id):
+                            logger.info(f"Skipping already processed torrent: {torrent_id} - {title}")
                             continue
                         
                         try:
-                            # Convert to direct download link
-                            torrent_id = link.split('/view/')[1].split('/')[0]
                             direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
                             
                             # Send to HuggingFace
                             result = await send_to_huggingface(title, direct_link)
                             
                             if result and result.get("status") == "ok":
-                                # Get the file_id and message_id from HuggingFace result
                                 file_id = result.get("file_id")
                                 message_id = result.get("message_id")
                                 
@@ -89,41 +92,36 @@ async def check_rss_feed(client):
                                     share_result = await create_share_link(message_id)
                                     
                                     if share_result["status"] == "ok":
-                                        # Store processed info
-                                        await mark_processed(guid, {
-                                            "title": title,
-                                            "file_id": file_id,
-                                            "message_id": message_id,
-                                            "share_link": share_result["link"],
-                                            "torrent_id": torrent_id
-                                        })
+                                        # Mark torrent as processed with all info
+                                        await mark_torrent_processed(
+                                            torrent_id=torrent_id,
+                                            title=title,
+                                            file_id=file_id,
+                                            message_id=message_id,
+                                            share_link=share_result["link"]
+                                        )
                                         
-                                        # Convert OWNER_ID to list if it's not already
+                                        # Send notification to admin(s)
                                         if isinstance(OWNER_ID, list):
                                             admin_list = OWNER_ID
                                         else:
                                             admin_list = [OWNER_ID]
                                         
-                                        # Send notification to admin(s)
                                         for admin in admin_list:
                                             try:
                                                 await client.send_message(
                                                     chat_id=admin,
-                                                    text=f"✅ New file processed: {title}\n\nShare Link: {share_result['link']}",
+                                                    text=f"✅ New file processed:\n\n"
+                                                         f"Title: {title}\n"
+                                                         f"Torrent ID: {torrent_id}\n"
+                                                         f"Share Link: {share_result['link']}",
                                                     reply_markup=share_result["reply_markup"]
                                                 )
                                             except Exception as e:
                                                 logger.error(f"Failed to notify admin {admin}: {str(e)}")
-                                        
-                                        logger.info(f"Successfully processed: {title}")
-                                else:
-                                    logger.error(f"Missing file_id or message_id for {title}")
-                            else:
-                                error = result.get("error", "Unknown error") if result else "No response"
-                                logger.error(f"Failed to process {title}: {error}")
-                            
+                        
                         except Exception as e:
-                            logger.error(f"Error processing {title}: {str(e)}")
+                            logger.error(f"Error processing torrent {torrent_id}: {str(e)}")
                             logger.error(traceback.format_exc())
                         
                         await asyncio.sleep(1)
