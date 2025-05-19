@@ -100,7 +100,7 @@ class AnimeInfo:
             
             buttons = [[
                 InlineKeyboardButton(
-                    "📥 Download",
+                    "𝟳𝟮𝟬𝗽",
                     url=share_link
                 )
             ]]
