@@ -207,8 +207,14 @@ async def is_torrent_processed(torrent_id):
         return False
 
 async def mark_torrent_processed(torrent_id, title, file_id=None, message_id=None, share_link=None):
-    """Mark a torrent as processed with all relevant information"""
+    current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     try:
+        # Check if already exists
+        existing = await db.processed_torrents.find_one({"torrent_id": str(torrent_id)})
+        if existing:
+            logger.warning(f"[{current_time}] Torrent {torrent_id} already marked as processed")
+            return existing["_id"]
+            
         document = {
             "torrent_id": str(torrent_id),
             "title": title,
@@ -220,10 +226,11 @@ async def mark_torrent_processed(torrent_id, title, file_id=None, message_id=Non
         }
         
         result = await db.processed_torrents.insert_one(document)
-        logger.info(f"Marked torrent {torrent_id} as processed")
+        logger.info(f"[{current_time}] Marked torrent {torrent_id} as processed")
         return result.inserted_id
+        
     except Exception as e:
-        logger.error(f"Error marking torrent as processed: {str(e)}")
+        logger.error(f"[{current_time}] Error marking torrent {torrent_id} as processed: {str(e)}")
         raise
 
 
