@@ -9,7 +9,6 @@ API_HASH = os.environ.get("API_HASH", "72541d6610ae7730e6135af9423b319c")
 OWNER_ID = int(os.environ.get("OWNER_ID", "5296584067"))
 MAIN_CHANNEL = int(os.environ.get("MAIN_CHANNEL", "-1002372552947"))
 CHANNEL_ID = int(os.environ.get("DB_CHANNEL", "-1002279496397"))
-LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1002197279542"))
 OWNER_IDS = [int(x) for x in os.environ.get("OWNER_IDS", "5296584067,5364178811").split(',')]
 THUMBNAIL = os.environ.get("THUMBNAIL", "Assist/Images/thumbnail.jpg")
 STICKER_ID = os.environ.get("STICKER_ID", "CAACAgUAAxkBAAIJZGfLOdpxPmkKJ_nlJICh0bmi7GF1AALLFwACWARYVg4ubUgM9uuVNgQ")
@@ -27,9 +26,6 @@ ARIA2_SECRET = os.environ.get("ARIA2_SECRET", "")  # Optional: Use "" if no secr
 ARIA2_HOST = os.environ.get("ARIA2_HOST", "http://localhost")  # Default host
 ARIA2_PORT = int(os.environ.get("ARIA2_PORT", "6800"))  # Default port
 
-# Logging Channel Configuration
-# Replace None with your log channel ID when you have one
-# Example: LOG_CHANNEL = -1001234567890
 LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1002197279542"))
 
 # Post Format
