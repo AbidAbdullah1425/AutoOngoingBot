@@ -98,7 +98,7 @@ async def check_rss_feed(client):
                                 continue
 
                             direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
-                            result = await send_to_huggingface(title, direct_link)
+                            result = await send_to_huggingface(title, direct_link, client)
                             
                             if result and result.get("status") == "ok":
                                 file_id = result.get("file_id")
