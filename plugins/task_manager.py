@@ -1,4 +1,4 @@
-from plugins.db import get_tracked_titles, is_processed, mark_processed
+from plugins.db import get_tracked_titles, is_torrent_processed, mark_torrent_processed
 from plugins.huggingface_uploader import send_to_huggingface
 from config import LOGGER, BOT_USERNAME, DB_CHANNEL_ID, OWNER_ID
 import feedparser
