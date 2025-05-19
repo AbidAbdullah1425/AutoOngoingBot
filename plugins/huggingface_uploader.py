@@ -1,4 +1,5 @@
 from aiohttp import ClientSession, ClientTimeout
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import LOGGER, HUGGINGFACE_URL
 from datetime import datetime, timezone
 import asyncio
