@@ -87,15 +87,7 @@ async def check_rss_feed(client):
                             continue
                         
                         try:
-                            # Check if Space is ready
-                            if not await check_space_status():
-                                logger.error("HuggingFace Space is not ready")
-                                for admin in admin_list:
-                                    await client.send_message(
-                                        chat_id=admin,
-                                        text="⚠️ HuggingFace Space is not ready. Waiting for next cycle."
-                                    )
-                                continue
+                            
 
                             direct_link = f"https://nyaa.si/download/{torrent_id}.torrent"
                             result = await send_to_huggingface(title, direct_link, client)
