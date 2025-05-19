@@ -16,6 +16,22 @@ except Exception as e:
     logger.critical(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}] Failed to connect to database: {str(e)}", exc_info=True)
     raise
 
+
+@Bot.on_message(filters.command("clean_processed") & filters.private & filters.user(OWNER_ID))
+async def clean_processed(client, message):
+    try:
+        # Delete entries older than X days
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        result = await db.processed_torrents.delete_many({
+            "processed_at": {"$lt": cutoff}
+        })
+        await message.reply_text(f"✅ Cleaned {result.deleted_count} old processed entries")
+    except Exception as e:
+        logger.error(f"Error cleaning processed entries: {str(e)}")
+        await message.reply_text("❌ Failed to clean processed entries!")
+
+
+
 @Bot.on_message(filters.command("addtask") & filters.private & filters.user(OWNER_ID))
 async def add_task_command(client, message):
     try:
