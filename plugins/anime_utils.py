@@ -1,4 +1,5 @@
 import aiohttp
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import Dict, Optional
 import re
 from config import LOGGER
