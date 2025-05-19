@@ -1,7 +1,6 @@
 aiohttp
 TgCrypto
-#pyrofork==2.3.45 
-pyrogram
+pyrofork==2.3.45 
 pymongo
 pyromod==1.5
 dnspython
