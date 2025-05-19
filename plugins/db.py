@@ -88,6 +88,24 @@ async def list_tasks_command(client, message):
         logger.error(f"Error in listtask command: {str(e)}")
         await message.reply_text("❌ Failed to list tasks! Something went wrong.")
 
+
+@Bot.on_message(filters.command("processed") & filters.private & filters.user(OWNER_ID))
+async def list_processed(client, message):
+    try:
+        count = await db.processed_torrents.count_documents({})
+        recent = await db.processed_torrents.find().sort("processed_at", -1).limit(5).to_list(None)
+        
+        text = f"Total processed torrents: {count}\n\nRecent processed:\n"
+        for item in recent:
+            text += f"\n• {item['title']}\n  ID: {item['torrent_id']}\n  Processed: {item['processed_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        
+        await message.reply_text(text)
+    except Exception as e:
+        logger.error(f"Error listing processed torrents: {str(e)}")
+        await message.reply_text("❌ Failed to list processed torrents!")
+
+
+
 async def add_task(title):
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     try:
