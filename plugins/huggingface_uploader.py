@@ -3,13 +3,17 @@ from config import LOGGER, HUGGINGFACE_URL, LOG_CHANNEL
 from datetime import datetime, timezone
 from pyrogram.enums import ParseMode
 import json
-import asyncio
 
 logger = LOGGER(__name__)
 
 TIMEOUT = ClientTimeout(total=600)  # 10 minutes timeout
-MAX_RETRIES = 40     # 40 retries
-RETRY_DELAY = 30     # 30 seconds delay
+
+async def get_response_text(response):
+    """Get response text safely"""
+    try:
+        return await response.text()
+    except:
+        return ""
 
 async def send_to_huggingface(title: str, torrent_link: str, client=None):
     """Send file to HuggingFace for processing"""
@@ -27,7 +31,8 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
         async with ClientSession(timeout=TIMEOUT) as session:
@@ -37,114 +42,72 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
                 headers=headers,
                 allow_redirects=True
             ) as response:
-                initial_status = response.status
-                logger.info(f"[{current_time}] Initial Status: {initial_status}")
+                status = response.status
+                logger.info(f"[{current_time}] Status: {status}")
+                
+                # Get response text
+                response_text = await get_response_text(response)
+                
+                # Try to parse JSON response
+                try:
+                    json_response = json.loads(response_text)
+                    if json_response.get("status") == "ok":
+                        return {"status": "ok", "data": json_response}
+                except:
+                    json_response = {}
 
-                if initial_status == 206:
-                    # File is processing, start polling
-                    progress_msg = (
-                        "🤖 <b>HuggingFace Processing Status</b>\n\n"
+                if status != 200:
+                    # For 206 status, include response text in error
+                    error_details = ""
+                    if status == 206:
+                        try:
+                            # Try to get meaningful error from response
+                            if response_text:
+                                error_details = f"\n💡 Details: {response_text[:200]}"
+                        except:
+                            pass
+
+                    error_report = (
+                        "🤖 <b>HuggingFace Upload Report</b>\n\n"
                         f"🎥 <b>File:</b> {title}\n"
                         f"⏰ <b>Time:</b> {current_time}\n"
-                        f"⏳ <b>Status:</b> Processing Started\n"
-                        f"📝 <b>Note:</b> This may take several minutes..."
+                        f"📊 <b>Status:</b> {status}\n"
+                        f"❌ <b>Error:</b> HTTP {status}{error_details}"
                     )
                     if client and LOG_CHANNEL:
-                        status_message = await client.send_message(
-                            LOG_CHANNEL, 
-                            progress_msg,
+                        await client.send_message(
+                            LOG_CHANNEL,
+                            error_report,
                             parse_mode=ParseMode.HTML
                         )
+                    return {
+                        "status": "failed", 
+                        "error": f"HTTP {status}",
+                        "details": response_text
+                    }
 
-                    # Poll for completion
-                    for retry in range(MAX_RETRIES):
-                        await asyncio.sleep(RETRY_DELAY)
-                        
-                        async with session.get(HUGGINGFACE_URL) as check_response:
-                            if check_response.status == 200:
-                                try:
-                                    result = await check_response.json()
-                                    if result.get("status") == "ok":
-                                        success_msg = (
-                                            "🤖 <b>HuggingFace Upload Success</b>\n\n"
-                                            f"🎥 <b>File:</b> {title}\n"
-                                            f"⏰ <b>Time:</b> {current_time}\n"
-                                            f"✅ <b>Status:</b> Completed"
-                                        )
-                                        if client and LOG_CHANNEL:
-                                            await status_message.edit(
-                                                success_msg,
-                                                parse_mode=ParseMode.HTML
-                                            )
-                                        return result
-                                except:
-                                    continue
-
-                            # Update progress message
-                            progress_msg = (
-                                "🤖 <b>HuggingFace Processing Status</b>\n\n"
-                                f"🎥 <b>File:</b> {title}\n"
-                                f"⏰ <b>Time:</b> {current_time}\n"
-                                f"⏳ <b>Status:</b> Still Processing\n"
-                                f"🔄 <b>Attempt:</b> {retry + 1}/{MAX_RETRIES}"
-                            )
-                            if client and LOG_CHANNEL:
-                                await status_message.edit(
-                                    progress_msg,
-                                    parse_mode=ParseMode.HTML
-                                )
-
-                    # If we reach here, process timed out
-                    timeout_msg = (
-                        "🤖 <b>HuggingFace Processing Timeout</b>\n\n"
+                # If we get here with a 200 status but no valid JSON
+                if status == 200 and not json_response:
+                    error_report = (
+                        "🤖 <b>HuggingFace Upload Report</b>\n\n"
                         f"🎥 <b>File:</b> {title}\n"
                         f"⏰ <b>Time:</b> {current_time}\n"
-                        f"❌ <b>Status:</b> Timeout\n"
-                        f"📝 <b>Note:</b> Process took too long"
+                        f"📊 <b>Status:</b> {status}\n"
+                        f"❌ <b>Error:</b> Invalid Response Format"
                     )
                     if client and LOG_CHANNEL:
-                        await status_message.edit(timeout_msg, parse_mode=ParseMode.HTML)
-                    return {"status": "failed", "error": "Processing timeout"}
+                        await client.send_message(
+                            LOG_CHANNEL,
+                            error_report,
+                            parse_mode=ParseMode.HTML
+                        )
+                    return {"status": "failed", "error": "Invalid response format"}
 
-                elif initial_status == 200:
-                    # Immediate success
-                    try:
-                        result = await response.json()
-                        if result.get("status") == "ok":
-                            success_msg = (
-                                "🤖 <b>HuggingFace Upload Success</b>\n\n"
-                                f"🎥 <b>File:</b> {title}\n"
-                                f"⏰ <b>Time:</b> {current_time}\n"
-                                f"✅ <b>Status:</b> Success"
-                            )
-                            if client and LOG_CHANNEL:
-                                await client.send_message(
-                                    LOG_CHANNEL, 
-                                    success_msg,
-                                    parse_mode=ParseMode.HTML
-                                )
-                            return result
-                    except:
-                        pass
-
-                # Handle other status codes as errors
-                error_msg = (
-                    "🤖 <b>HuggingFace Upload Error</b>\n\n"
-                    f"🎥 <b>File:</b> {title}\n"
-                    f"⏰ <b>Time:</b> {current_time}\n"
-                    f"❌ <b>Status:</b> {initial_status}"
-                )
-                if client and LOG_CHANNEL:
-                    await client.send_message(
-                        LOG_CHANNEL, 
-                        error_msg,
-                        parse_mode=ParseMode.HTML
-                    )
-                return {"status": "failed", "error": f"HTTP {initial_status}"}
+                return {"status": "ok"}
 
     except Exception as e:
-        error_msg = (
-            "🤖 <b>HuggingFace Upload Error</b>\n\n"
+        error_report = (
+            "🤖 <b>HuggingFace Upload Report</b>\n\n"
             f"🎥 <b>File:</b> {title}\n"
             f"⏰ <b>Time:</b> {current_time}\n"
             f"❌ <b>Error:</b> {str(e)}"
@@ -152,8 +115,8 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
         logger.error(f"Error in send_to_huggingface: {str(e)}")
         if client and LOG_CHANNEL:
             await client.send_message(
-                LOG_CHANNEL, 
-                error_msg,
+                LOG_CHANNEL,
+                error_report,
                 parse_mode=ParseMode.HTML
             )
         return {"status": "failed", "error": str(e)}
