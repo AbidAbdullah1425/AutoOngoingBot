@@ -1,21 +1,15 @@
 from aiohttp import ClientSession, ClientTimeout
 from config import LOGGER, HUGGINGFACE_URL, LOG_CHANNEL
 from datetime import datetime, timezone
+from pyrogram.enums import ParseMode
 import json
 import asyncio
 
 logger = LOGGER(__name__)
 
 TIMEOUT = ClientTimeout(total=600)  # 10 minutes timeout
-MAX_RETRIES = 10  # Maximum number of retries
-RETRY_DELAY = 30  # Delay between retries in seconds
-
-async def check_processing_status(session, url, title):
-    """Check processing status of the file"""
-    async with session.get(url) as response:
-        if response.status == 200:
-            return await response.json()
-        return None
+MAX_RETRIES = 40     # 40 retries
+RETRY_DELAY = 30     # 30 seconds delay
 
 async def send_to_huggingface(title: str, torrent_link: str, client=None):
     """Send file to HuggingFace for processing"""
@@ -37,7 +31,6 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
         }
 
         async with ClientSession(timeout=TIMEOUT) as session:
-            # Initial upload request
             async with session.post(
                 HUGGINGFACE_URL,
                 data=data,
@@ -50,7 +43,7 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
                 if initial_status == 206:
                     # File is processing, start polling
                     progress_msg = (
-                        f"🤖 <b>HuggingFace Processing Status</b>\n\n"
+                        "🤖 <b>HuggingFace Processing Status</b>\n\n"
                         f"🎥 <b>File:</b> {title}\n"
                         f"⏰ <b>Time:</b> {current_time}\n"
                         f"⏳ <b>Status:</b> Processing Started\n"
@@ -59,8 +52,8 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
                     if client and LOG_CHANNEL:
                         status_message = await client.send_message(
                             LOG_CHANNEL, 
-                            progress_msg, 
-                            parse_mode="html"
+                            progress_msg,
+                            parse_mode=ParseMode.HTML
                         )
 
                     # Poll for completion
@@ -73,15 +66,15 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
                                     result = await check_response.json()
                                     if result.get("status") == "ok":
                                         success_msg = (
-                                            f"🤖 <b>HuggingFace Upload Success</b>\n\n"
+                                            "🤖 <b>HuggingFace Upload Success</b>\n\n"
                                             f"🎥 <b>File:</b> {title}\n"
                                             f"⏰ <b>Time:</b> {current_time}\n"
                                             f"✅ <b>Status:</b> Completed"
                                         )
                                         if client and LOG_CHANNEL:
                                             await status_message.edit(
-                                                success_msg, 
-                                                parse_mode="html"
+                                                success_msg,
+                                                parse_mode=ParseMode.HTML
                                             )
                                         return result
                                 except:
@@ -89,7 +82,7 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
 
                             # Update progress message
                             progress_msg = (
-                                f"🤖 <b>HuggingFace Processing Status</b>\n\n"
+                                "🤖 <b>HuggingFace Processing Status</b>\n\n"
                                 f"🎥 <b>File:</b> {title}\n"
                                 f"⏰ <b>Time:</b> {current_time}\n"
                                 f"⏳ <b>Status:</b> Still Processing\n"
@@ -97,20 +90,20 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
                             )
                             if client and LOG_CHANNEL:
                                 await status_message.edit(
-                                    progress_msg, 
-                                    parse_mode="html"
+                                    progress_msg,
+                                    parse_mode=ParseMode.HTML
                                 )
 
                     # If we reach here, process timed out
                     timeout_msg = (
-                        f"🤖 <b>HuggingFace Processing Timeout</b>\n\n"
+                        "🤖 <b>HuggingFace Processing Timeout</b>\n\n"
                         f"🎥 <b>File:</b> {title}\n"
                         f"⏰ <b>Time:</b> {current_time}\n"
                         f"❌ <b>Status:</b> Timeout\n"
                         f"📝 <b>Note:</b> Process took too long"
                     )
                     if client and LOG_CHANNEL:
-                        await status_message.edit(timeout_msg, parse_mode="html")
+                        await status_message.edit(timeout_msg, parse_mode=ParseMode.HTML)
                     return {"status": "failed", "error": "Processing timeout"}
 
                 elif initial_status == 200:
@@ -119,7 +112,7 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
                         result = await response.json()
                         if result.get("status") == "ok":
                             success_msg = (
-                                f"🤖 <b>HuggingFace Upload Success</b>\n\n"
+                                "🤖 <b>HuggingFace Upload Success</b>\n\n"
                                 f"🎥 <b>File:</b> {title}\n"
                                 f"⏰ <b>Time:</b> {current_time}\n"
                                 f"✅ <b>Status:</b> Success"
@@ -127,8 +120,8 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
                             if client and LOG_CHANNEL:
                                 await client.send_message(
                                     LOG_CHANNEL, 
-                                    success_msg, 
-                                    parse_mode="html"
+                                    success_msg,
+                                    parse_mode=ParseMode.HTML
                                 )
                             return result
                     except:
@@ -136,23 +129,31 @@ async def send_to_huggingface(title: str, torrent_link: str, client=None):
 
                 # Handle other status codes as errors
                 error_msg = (
-                    f"🤖 <b>HuggingFace Upload Error</b>\n\n"
+                    "🤖 <b>HuggingFace Upload Error</b>\n\n"
                     f"🎥 <b>File:</b> {title}\n"
                     f"⏰ <b>Time:</b> {current_time}\n"
                     f"❌ <b>Status:</b> {initial_status}"
                 )
                 if client and LOG_CHANNEL:
-                    await client.send_message(LOG_CHANNEL, error_msg, parse_mode="html")
+                    await client.send_message(
+                        LOG_CHANNEL, 
+                        error_msg,
+                        parse_mode=ParseMode.HTML
+                    )
                 return {"status": "failed", "error": f"HTTP {initial_status}"}
 
     except Exception as e:
         error_msg = (
-            f"🤖 <b>HuggingFace Upload Error</b>\n\n"
+            "🤖 <b>HuggingFace Upload Error</b>\n\n"
             f"🎥 <b>File:</b> {title}\n"
             f"⏰ <b>Time:</b> {current_time}\n"
             f"❌ <b>Error:</b> {str(e)}"
         )
         logger.error(f"Error in send_to_huggingface: {str(e)}")
         if client and LOG_CHANNEL:
-            await client.send_message(LOG_CHANNEL, error_msg, parse_mode="html")
+            await client.send_message(
+                LOG_CHANNEL, 
+                error_msg,
+                parse_mode=ParseMode.HTML
+            )
         return {"status": "failed", "error": str(e)}
