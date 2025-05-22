@@ -34,7 +34,7 @@ class AnimeInfo:
     @staticmethod
     async def get_anime_data(anime_name: str) -> Dict:
         """Get anime info from Anilist"""
-        query = '''
+'''        query = '''
         query ($search: String) {
             Media (search: $search, type: ANIME) {
                 id
