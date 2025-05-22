@@ -1,4 +1,4 @@
-from config import LOGGER, ANILIST_API
+'''from config import LOGGER, ANILIST_API
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import Dict, List
 import aiohttp
@@ -114,3 +114,4 @@ class AnimeInfo:
         except Exception as e:
             logger.error(f"Error formatting post: {str(e)}")
             return {"success": False}
+'''
